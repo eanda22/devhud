@@ -20,6 +20,7 @@ var (
 			Foreground(lipgloss.Color("#626262"))
 )
 
+// renders the welcome screen.
 func RenderWelcome() string {
 	title := titleStyle.Render("devhud")
 	content := "Welcome to devhud!\n\nA unified local dev environment manager"

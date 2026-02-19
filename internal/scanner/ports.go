@@ -19,6 +19,7 @@ type PortInfo struct {
 	PID     string
 }
 
+// scans common development ports.
 func NewPortScanner() *PortScanner {
 	return &PortScanner{
 		commonPorts: []int{
@@ -28,6 +29,7 @@ func NewPortScanner() *PortScanner {
 	}
 }
 
+// returns processes listening on ports.
 func (ps *PortScanner) ListeningPorts() ([]PortInfo, error) {
 	ports, err := ps.scanWithLsof()
 	if err == nil && len(ports) > 0 {
@@ -37,6 +39,7 @@ func (ps *PortScanner) ListeningPorts() ([]PortInfo, error) {
 	return ps.scanWithDial()
 }
 
+// uses lsof to find listening ports with process details.
 func (ps *PortScanner) scanWithLsof() ([]PortInfo, error) {
 	cmd := exec.Command("lsof", "-i", "-P", "-n", "-sTCP:LISTEN")
 	output, err := cmd.Output()
@@ -77,6 +80,7 @@ func (ps *PortScanner) scanWithLsof() ([]PortInfo, error) {
 	return ports, nil
 }
 
+// tests common ports with TCP dial as fallback.
 func (ps *PortScanner) scanWithDial() ([]PortInfo, error) {
 	var ports []PortInfo
 

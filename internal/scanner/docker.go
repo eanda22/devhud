@@ -12,6 +12,7 @@ type DockerScanner struct {
 	client *client.Client
 }
 
+// initializes a Docker client.
 func NewDockerScanner() (*DockerScanner, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -20,6 +21,7 @@ func NewDockerScanner() (*DockerScanner, error) {
 	return &DockerScanner{client: cli}, nil
 }
 
+// lists all Docker containers (running and stopped).
 func (ds *DockerScanner) ListContainers(ctx context.Context) ([]ContainerInfo, error) {
 	var found []ContainerInfo
 
@@ -52,6 +54,7 @@ func (ds *DockerScanner) ListContainers(ctx context.Context) ([]ContainerInfo, e
 	return found, nil
 }
 
+// closes the Docker client connection.
 func (ds *DockerScanner) Close() error {
 	if ds.client != nil {
 		return ds.client.Close()

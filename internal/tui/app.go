@@ -18,9 +18,11 @@ type ScanCompleteMsg struct {
 type TickMsg struct{}
 
 type App struct {
-	services *service.Store
-	scanner  *scanner.Scanner
-	ticker   *time.Ticker
+	services      *service.Store
+	scanner       *scanner.Scanner
+	ticker        *time.Ticker
+	selectedIndex int
+	lastError     error
 }
 
 func NewApp() (*App, error) {
@@ -43,6 +45,7 @@ func (a *App) Init() tea.Cmd {
 	)
 }
 
+// performs service discovery.
 func (a *App) scanCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -56,6 +59,7 @@ func (a *App) scanCmd() tea.Cmd {
 	}
 }
 
+// triggers periodic refresh.
 func (a *App) tickCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 		return TickMsg{}
@@ -69,11 +73,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			a.scanner.Close()
 			return a, tea.Quit
+		case "up", "k":
+			if a.selectedIndex > 0 {
+				a.selectedIndex--
+			}
+		case "down", "j":
+			if a.selectedIndex < len(a.services.GetAll())-1 {
+				a.selectedIndex++
+			}
+
 		}
 
 	case ScanCompleteMsg:
 		if msg.Error != nil {
-			fmt.Printf("Scan error: %v\n", msg.Error)
+			a.lastError = msg.Error
 		}
 		return a, nil
 
@@ -85,5 +98,5 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
-	return RenderDashboard(a.services.GetAll())
+	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError)
 }

@@ -9,6 +9,7 @@ type ProcessScanner struct {
 	targets map[string]bool
 }
 
+// scans for development tool processes.
 func NewProcessScanner() *ProcessScanner {
 	return &ProcessScanner{
 		targets: map[string]bool{
@@ -29,6 +30,7 @@ type ProcessInfo struct {
 	User    string
 }
 
+// returns running processes matching target development tools.
 func (ps *ProcessScanner) FindProcesses() ([]ProcessInfo, error) {
 	var found []ProcessInfo
 

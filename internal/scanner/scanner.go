@@ -16,10 +16,11 @@ type Scanner struct {
 	store          *service.Store
 }
 
+// initializes all available discovery methods.
 func NewScanner(store *service.Store) (*Scanner, error) {
 	dockerScanner, err := NewDockerScanner()
 	if err != nil {
-		fmt.Printf("Warning: Docker not available: %v\n", err)
+		dockerScanner = nil
 	}
 
 	return &Scanner{
@@ -30,26 +31,22 @@ func NewScanner(store *service.Store) (*Scanner, error) {
 	}, nil
 }
 
+// discovers all services and updates the store.
 func (s *Scanner) Scan(ctx context.Context) error {
 	s.store.Clear()
 
 	if s.dockerScanner != nil {
-		if err := s.scanDocker(ctx); err != nil {
-			fmt.Printf("Docker scan error: %v\n", err)
-		}
+		_ = s.scanDocker(ctx)
 	}
 
-	if err := s.scanPorts(ctx); err != nil {
-		fmt.Printf("Port scan error: %v\n", err)
-	}
+	_ = s.scanPorts(ctx)
 
-	if err := s.scanProcesses(ctx); err != nil {
-		fmt.Printf("Process scan error: %v\n", err)
-	}
+	_ = s.scanProcesses(ctx)
 
 	return nil
 }
 
+// discovers running Docker containers.
 func (s *Scanner) scanDocker(ctx context.Context) error {
 	containers, err := s.dockerScanner.ListContainers(ctx)
 	if err != nil {
@@ -78,6 +75,7 @@ func (s *Scanner) scanDocker(ctx context.Context) error {
 	return nil
 }
 
+// discovers processes listening on common ports.
 func (s *Scanner) scanPorts(ctx context.Context) error {
 	portInfos, err := s.portScanner.ListeningPorts()
 	if err != nil {
@@ -95,8 +93,10 @@ func (s *Scanner) scanPorts(ctx context.Context) error {
 		}
 
 		if info.PID != "" {
-			pid, _ := strconv.Atoi(info.PID)
-			svc.PID = pid
+			pid, err := strconv.Atoi(info.PID)
+			if err == nil {
+				svc.PID = pid
+			}
 		}
 
 		s.store.Upsert(svc)
@@ -105,6 +105,7 @@ func (s *Scanner) scanPorts(ctx context.Context) error {
 	return nil
 }
 
+// discovers target development processes.
 func (s *Scanner) scanProcesses(ctx context.Context) error {
 	processes, err := s.processScanner.FindProcesses()
 	if err != nil {
@@ -112,7 +113,10 @@ func (s *Scanner) scanProcesses(ctx context.Context) error {
 	}
 
 	for _, p := range processes {
-		pid, _ := strconv.Atoi(p.PID)
+		pid, err := strconv.Atoi(p.PID)
+		if err != nil {
+			pid = 0
+		}
 		svc := &service.Service{
 			ID:        p.PID,
 			Name:      p.Command,
@@ -128,6 +132,7 @@ func (s *Scanner) scanProcesses(ctx context.Context) error {
 	return nil
 }
 
+// closes the scanner.
 func (s *Scanner) Close() error {
 	if s.dockerScanner != nil {
 		return s.dockerScanner.Close()
