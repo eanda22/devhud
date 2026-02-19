@@ -77,15 +77,46 @@ func renderServiceList(services []*service.Service, serviceIndex int) (string, s
 
 // renders detailed information for the selected service.
 func renderDetailPanel(svc *service.Service) string {
-	serviceInfo := fmt.Sprintf(
-		"Name: %-20s\nType: %-20s\nStatus: %-20s\nContainer ID: %-20s\nImage: %-20s\nProject: %-20s\n",
-		svc.Name,
-		svc.Type,
-		svc.Status,
-		svc.ContainerID,
-		svc.Image,
-		svc.Project,
-	)
+	var serviceInfo string
+
+	switch svc.Type {
+	case service.ServiceTypeDocker, service.ServiceTypeCompose:
+		serviceInfo = fmt.Sprintf(
+			"Name: %-20s\nType: %-20s\nStatus: %-20s\nContainer ID: %-20s\nImage: %-20s\nUptime: %-20s\n",
+			svc.Name,
+			svc.Type,
+			svc.Status,
+			svc.ContainerID,
+			svc.Image,
+			formatUptime(svc.Uptime),
+		)
+	case service.ServiceTypeProcess:
+		pid := fmt.Sprintf("%d", svc.PID)
+		if svc.PID == 0 {
+			pid = "-"
+		}
+		port := fmt.Sprintf("%d", svc.Port)
+		if svc.Port == 0 {
+			port = "-"
+		}
+		serviceInfo = fmt.Sprintf(
+			"Name: %-20s\nType: %-20s\nStatus: %-20s\nPID: %-20s\nPort: %-20s\nUptime: %-20s\n",
+			svc.Name,
+			svc.Type,
+			svc.Status,
+			pid,
+			port,
+			formatUptime(svc.Uptime),
+		)
+	default:
+		serviceInfo = fmt.Sprintf(
+			"Name: %-20s\nType: %-20s\nStatus: %-20s\nUptime: %-20s\n",
+			svc.Name,
+			svc.Type,
+			svc.Status,
+			formatUptime(svc.Uptime),
+		)
+	}
 
 	return dashboardStyle.Render(serviceInfo)
 }
