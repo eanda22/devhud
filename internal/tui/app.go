@@ -32,6 +32,7 @@ type App struct {
 	mode             string
 	logsView         *LogsView
 	dbTablesView     *DBTablesView
+	dbDataView       *DBDataView
 	width            int
 	height           int
 }
@@ -169,8 +170,24 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if a.dbTablesView.openTable != "" {
-			a.statusMessage = "Table data view not yet implemented"
+			tableName := a.dbTablesView.openTable
+			a.dbDataView = NewDBDataView(a.dbTablesView.service, tableName, a.dbTablesView.dbClient, a.width, a.height)
+			a.mode = "db_data"
 			a.dbTablesView.openTable = ""
+			return a, a.dbDataView.Init()
+		}
+
+		return a, cmd
+	}
+
+	if a.mode == "db_data" && a.dbDataView != nil {
+		updatedView, cmd := a.dbDataView.Update(msg)
+		a.dbDataView = updatedView
+
+		if a.dbDataView.shouldExit {
+			a.mode = "db_tables"
+			a.dbDataView = nil
+			return a, nil
 		}
 
 		return a, cmd
@@ -300,6 +317,9 @@ func (a *App) View() string {
 	}
 	if a.mode == "db_tables" && a.dbTablesView != nil {
 		return a.dbTablesView.View()
+	}
+	if a.mode == "db_data" && a.dbDataView != nil {
+		return a.dbDataView.View()
 	}
 	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError, a.statusMessage, a.confirmOperation, a.operatingOnID)
 }

@@ -17,3 +17,9 @@ type TablesFetchedMsg struct {
 	Client *db.Client
 	Error  error
 }
+
+type TableDataFetchedMsg struct {
+	Columns []db.ColumnInfo
+	Rows    db.RowData
+	Error   error
+}
