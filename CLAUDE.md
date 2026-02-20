@@ -40,6 +40,16 @@ Built in Go 1.22+ with Bubble Tea, Lip Gloss, Bubbles, and Cobra.
 - Be clear about what changed and why.
 - No signatures or co-authored lines needed.
 
+### Pull Requests
+Before opening a PR:
+1. Fetch latest main: `git fetch origin main`
+2. Rebase feature branch: `git rebase origin/main`
+3. Resolve any conflicts locally
+4. Push to remote: `git push -u origin <branch-name>` (or `--force-with-lease` if rebasing existing branch)
+5. Open PR with clear description of changes
+
+This ensures the branch is up-to-date and conflicts are resolved before review.
+
 ### Bubble Tea
 - Each TUI mode is a `tea.Model` (Dashboard, Logs, DB, Env)
 - Root `App` model delegates to the active mode
