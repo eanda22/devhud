@@ -11,6 +11,9 @@
 # Project binary
 devhud
 
+# goreleaser
+dist/
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -4,20 +4,25 @@ A unified, interactive TUI tool for managing local development environments.
 
 Manage Docker containers, dev server processes, databases, logs, ports, and environment variables in a single terminal session.
 
-## Status
+## Installation
 
-**Phase 0: Project Setup** - Initial scaffolding complete
+### Download Pre-Built Binary
 
-## Quick Start
+Download the latest release for your platform from the [Releases](https://github.com/eanda22/devhud/releases) page.
 
 ```bash
-# Install dependencies
-go mod download
+# Extract the archive
+tar -xzf devhud_*_*.tar.gz
 
-# Run
-go run .
+# Move to PATH (optional)
+mv devhud /usr/local/bin/
+```
 
-# Build
+### Build from Source
+
+```bash
+git clone https://github.com/eanda22/devhud
+cd devhud
 make build
 ./devhud
 ```
