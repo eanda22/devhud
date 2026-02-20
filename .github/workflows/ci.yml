@@ -29,3 +29,11 @@ jobs:
 
     - name: Vet
       run: go vet ./...
+
+    - name: Format Check
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files are not formatted:"
+          gofmt -s -l .
+          exit 1
+        fi
