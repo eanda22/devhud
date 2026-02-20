@@ -10,7 +10,10 @@
       "Bash(make build:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(gh run list:*)"
     ]
   }
 }
