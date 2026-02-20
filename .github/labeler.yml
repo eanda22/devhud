@@ -1,0 +1,28 @@
+docker:
+  - internal/docker/**/*
+  - internal/service/*docker*
+
+database:
+  - internal/db/**/*
+  - cmd/*db*
+
+tui:
+  - internal/tui/**/*
+
+scanner:
+  - internal/scanner/**/*
+
+tests:
+  - '**/*_test.go'
+
+documentation:
+  - '**.md'
+  - CLAUDE.md
+  - README.md
+
+github:
+  - .github/**/*
+
+dependencies:
+  - go.mod
+  - go.sum
