@@ -48,9 +48,14 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 		}
 		uptime := formatUptime(svc.Uptime)
 
+		serviceName := svc.Name
+		if svc.DBType != "" {
+			serviceName += " [DB]"
+		}
+
 		row := fmt.Sprintf("%-6s %-40s %-10s %-6s %-10s",
 			status,
-			truncate(svc.Name, 18),
+			truncate(serviceName, 18),
 			string(svc.Type),
 			port,
 			uptime,
