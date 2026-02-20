@@ -60,6 +60,7 @@ func (s *Scanner) scanDocker(ctx context.Context) error {
 			Type:        service.ServiceTypeDocker,
 			ContainerID: c.ID,
 			Image:       c.Image,
+			DBType:      c.DBType,
 			StartTime:   time.Now(),
 		}
 
