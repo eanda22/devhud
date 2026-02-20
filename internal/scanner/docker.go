@@ -45,11 +45,12 @@ func (ds *DockerScanner) ListContainers(ctx context.Context) ([]ContainerInfo, e
 		}
 
 		found = append(found, ContainerInfo{
-			ID:     c.ID[:12],
-			Name:   name,
-			Image:  imageName,
-			State:  c.State,
-			DBType: db.DetectType(imageName),
+			ID:      c.ID[:12],
+			Name:    name,
+			Image:   imageName,
+			State:   c.State,
+			DBType:  db.DetectType(imageName),
+			Created: c.Created,
 		})
 	}
 
@@ -65,9 +66,10 @@ func (ds *DockerScanner) Close() error {
 }
 
 type ContainerInfo struct {
-	ID     string
-	Name   string
-	Image  string
-	State  string
-	DBType string
+	ID      string
+	Name    string
+	Image   string
+	State   string
+	DBType  string
+	Created int64
 }

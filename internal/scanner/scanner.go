@@ -33,15 +33,21 @@ func NewScanner(store *service.Store) (*Scanner, error) {
 
 // discovers all services and updates the store.
 func (s *Scanner) Scan(ctx context.Context) error {
+	// Save existing services to preserve StartTime for processes
+	oldServices := make(map[string]*service.Service)
+	for _, svc := range s.store.GetAll() {
+		oldServices[svc.ID] = svc
+	}
+
 	s.store.Clear()
 
 	if s.dockerScanner != nil {
 		_ = s.scanDocker(ctx)
 	}
 
-	_ = s.scanPorts(ctx)
+	_ = s.scanPorts(ctx, oldServices)
 
-	_ = s.scanProcesses(ctx)
+	_ = s.scanProcesses(ctx, oldServices)
 
 	return nil
 }
@@ -54,6 +60,12 @@ func (s *Scanner) scanDocker(ctx context.Context) error {
 	}
 
 	for _, c := range containers {
+		startTime := time.Unix(c.Created, 0)
+		uptime := time.Duration(0)
+		if c.State == "running" {
+			uptime = time.Since(startTime)
+		}
+
 		svc := &service.Service{
 			ID:          c.ID,
 			Name:        c.Name,
@@ -61,7 +73,8 @@ func (s *Scanner) scanDocker(ctx context.Context) error {
 			ContainerID: c.ID,
 			Image:       c.Image,
 			DBType:      c.DBType,
-			StartTime:   time.Now(),
+			StartTime:   startTime,
+			Uptime:      uptime,
 		}
 
 		if c.State == "running" {
@@ -77,20 +90,31 @@ func (s *Scanner) scanDocker(ctx context.Context) error {
 }
 
 // discovers processes listening on common ports.
-func (s *Scanner) scanPorts(ctx context.Context) error {
+func (s *Scanner) scanPorts(ctx context.Context, oldServices map[string]*service.Service) error {
 	portInfos, err := s.portScanner.ListeningPorts()
 	if err != nil {
 		return err
 	}
 
 	for _, info := range portInfos {
+		id := fmt.Sprintf("port-%d", info.Port)
+		startTime := time.Now()
+		uptime := time.Duration(0)
+
+		// Preserve StartTime if this service existed before
+		if old, exists := oldServices[id]; exists {
+			startTime = old.StartTime
+			uptime = time.Since(startTime)
+		}
+
 		svc := &service.Service{
-			ID:        fmt.Sprintf("port-%d", info.Port),
+			ID:        id,
 			Name:      info.Process,
 			Type:      service.ServiceTypeProcess,
 			Port:      info.Port,
 			Status:    service.StatusRunning,
-			StartTime: time.Now(),
+			StartTime: startTime,
+			Uptime:    uptime,
 		}
 
 		if info.PID != "" {
@@ -107,24 +131,47 @@ func (s *Scanner) scanPorts(ctx context.Context) error {
 }
 
 // discovers target development processes.
-func (s *Scanner) scanProcesses(ctx context.Context) error {
+func (s *Scanner) scanProcesses(ctx context.Context, oldServices map[string]*service.Service) error {
 	processes, err := s.processScanner.FindProcesses()
 	if err != nil {
 		return err
 	}
 
+	portInfos, _ := s.portScanner.ListeningPorts()
+	portPIDs := make(map[string]bool)
+	for _, pInfo := range portInfos {
+		if pInfo.PID != "" {
+			portPIDs[pInfo.PID] = true
+		}
+	}
+
 	for _, p := range processes {
+		if !portPIDs[p.PID] {
+			continue
+		}
+
 		pid, err := strconv.Atoi(p.PID)
 		if err != nil {
 			pid = 0
 		}
+
+		startTime := time.Now()
+		uptime := time.Duration(0)
+
+		// Preserve StartTime if this service existed before
+		if old, exists := oldServices[p.PID]; exists {
+			startTime = old.StartTime
+			uptime = time.Since(startTime)
+		}
+
 		svc := &service.Service{
 			ID:        p.PID,
 			Name:      p.Command,
 			Type:      service.ServiceTypeProcess,
 			PID:       pid,
 			Status:    service.StatusRunning,
-			StartTime: time.Now(),
+			StartTime: startTime,
+			Uptime:    uptime,
 		}
 
 		s.store.Upsert(svc)

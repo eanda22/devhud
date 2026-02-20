@@ -6,46 +6,84 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/eanda22/devhud/internal/docker"
 	"github.com/eanda22/devhud/internal/service"
 )
 
+const Version = "0.2.0"
+
+func renderHeader(category string) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true).
+		Render(fmt.Sprintf("DEVHUD v%s | %s", Version, category))
+}
+
 // renders the main service list and detail panel.
-func RenderDashboard(services []*service.Service, serviceIndex int, lastError error, statusMessage string, confirmOperation string, operatingOnID string) string {
+func RenderDashboard(a *App) string {
+	services := a.getFilteredServices()
+
 	if len(services) == 0 {
 		msg := "No services discovered. Scanning..."
-		if lastError != nil {
-			msg += fmt.Sprintf("\nLast error: %v", lastError)
+		if a.lastError != nil {
+			msg += fmt.Sprintf("\nLast error: %v", a.lastError)
 		}
 		return dashboardStyle.Render(msg)
 	}
 
-	servicesList, detailPanel := renderServiceList(services, serviceIndex, statusMessage, confirmOperation, operatingOnID)
+	sidebar := renderSidebar(a)
+
+	selectedCategory := ""
+	if a.activeCatIndex < len(a.categories) {
+		selectedCategory = a.categories[a.activeCatIndex]
+	}
+	header := renderHeader(selectedCategory)
+
+	servicesList, detailPanel := renderServiceList(
+		services,
+		a.activeCatIndex,
+		a.selectedIndex,
+		a.focus,
+		a.confirmOperation,
+		a.operatingOnID,
+		a.dockerDiskUsage,
+		a.statusMessage,
+	)
+
+	mainContent := dashboardStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, servicesList))
 
 	if detailPanel != "" {
-		return lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			dashboardStyle.Render(servicesList),
-			detailPanel,
-		)
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, mainContent, detailPanel)
 	}
 
-	return dashboardStyle.Render(servicesList)
+	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent)
 }
 
 // renders the service table with header and footer.
-func renderServiceList(services []*service.Service, serviceIndex int, statusMessage string, confirmOperation string, operatingOnID string) (string, string) {
-	header := fmt.Sprintf("%-6s %-40s %-10s %-6s %-10s\n",
-		"STATUS", "NAME", "TYPE", "PORT", "UPTIME")
+func renderServiceList(
+	services []*service.Service,
+	activeCatIndex int,
+	selectedIndex int,
+	focus Focus,
+	confirmOperation string,
+	operatingOnID string,
+	dockerDiskUsage *docker.DiskUsage,
+	statusMessage string,
+) (string, string) {
+	// Column header: DISK for Containers(0) and Databases(2), PORT for Local Procs(1)
+	diskOrPortHeader := "DISK"
+	if activeCatIndex == 1 {
+		diskOrPortHeader = "PORT"
+	}
+
+	header := fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s\n",
+		"STATUS", "NAME", "TYPE", diskOrPortHeader, "UPTIME")
 
 	var detailPanel string
 	rows := []string{}
 
 	for i, svc := range services {
 		status := statusIcon(svc.Status)
-		port := fmt.Sprintf("%d", svc.Port)
-		if svc.Port == 0 {
-			port = "-"
-		}
 		uptime := formatUptime(svc.Uptime)
 
 		serviceName := svc.Name
@@ -53,31 +91,40 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 			serviceName += " [DB]"
 		}
 
-		row := fmt.Sprintf("%-6s %-40s %-10s %-6s %-10s",
+		var diskColumn string
+		if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+			if dockerDiskUsage != nil && dockerDiskUsage.ContainerSizes != nil {
+				if size, ok := dockerDiskUsage.ContainerSizes[svc.ContainerID]; ok {
+					diskColumn = formatBytes(size)
+				} else {
+					diskColumn = "-"
+				}
+			} else {
+				diskColumn = "-"
+			}
+		} else {
+			port := fmt.Sprintf("%d", svc.Port)
+			if svc.Port == 0 {
+				port = "-"
+			}
+			diskColumn = port
+		}
+
+		row := fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s",
 			status,
-			truncate(serviceName, 18),
+			truncate(serviceName, 38),
 			string(svc.Type),
-			port,
+			diskColumn,
 			uptime,
 		)
 
-		var selectedStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#7D56F4")).
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Bold(true)
-
-		var operatingStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#FFA500")).
-			Foreground(lipgloss.Color("#000000")).
-			Bold(true)
-
 		if svc.ID == operatingOnID && operatingOnID != "" {
-			row = operatingStyle.Render(row)
-			if i == serviceIndex {
+			row = operatingRowStyle.Render(row)
+			if i == selectedIndex && focus == FocusMainList {
 				detailPanel = renderDetailPanel(svc)
 			}
-		} else if i == serviceIndex {
-			row = selectedStyle.Render(row)
+		} else if i == selectedIndex && focus == FocusMainList {
+			row = selectedRowStyle.Render(row)
 			detailPanel = renderDetailPanel(svc)
 		}
 
@@ -88,7 +135,11 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 	if confirmOperation != "" {
 		footer += "⚠ Confirm delete? [y/N]\n"
 	} else {
-		footer += "[↑/↓] navigate [q]uit\n"
+		if focus == FocusSidebar {
+			footer += "[↑/↓] Navigate   [→] Select   [q] Quit\n"
+		} else {
+			footer += "[↑/↓] Navigate   [←] Back   [Enter] Actions   [q] Quit\n"
+		}
 		if statusMessage != "" {
 			footer += fmt.Sprintf("%s\n", statusMessage)
 		}
@@ -99,7 +150,6 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 	return servicesList, detailPanel
 }
 
-// renders detailed information for the selected service.
 func renderDetailPanel(svc *service.Service) string {
 	var serviceInfo string
 
@@ -110,8 +160,8 @@ func renderDetailPanel(svc *service.Service) string {
 			svc.Name,
 			svc.Type,
 			svc.Status,
-			svc.ContainerID,
-			svc.Image,
+			truncate(svc.ContainerID, 20),
+			truncate(svc.Image, 20),
 			formatUptime(svc.Uptime),
 		)
 	case service.ServiceTypeProcess:
@@ -142,27 +192,7 @@ func renderDetailPanel(svc *service.Service) string {
 		)
 	}
 
-	actions := getServiceActions(svc)
-	if actions != "" {
-		serviceInfo += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Actions: ") + actions + "\n"
-	}
-
 	return dashboardStyle.Render(serviceInfo)
-}
-
-// returns available action keys for a service type.
-func getServiceActions(svc *service.Service) string {
-	if svc.DBType != "" {
-		return "[s]tart [x]stop [r]estart [b]rowse db [l]ogs"
-	}
-	switch svc.Type {
-	case service.ServiceTypeDocker, service.ServiceTypeCompose:
-		return "[s]tart [x]stop [r]estart [d]elete [l]ogs"
-	case service.ServiceTypeProcess:
-		return "[x]kill [l]ogs"
-	default:
-		return ""
-	}
 }
 
 // returns the appropriate icon for a service status.
@@ -198,6 +228,54 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen-1] + "…"
 	}
 	return s
+}
+
+// renders the sidebar with categories.
+func renderSidebar(a *App) string {
+	var items []string
+
+	for i, cat := range a.categories {
+		var line string
+		if i == a.activeCatIndex {
+			line = activeMenuItemStyle.Render(cat)
+		} else {
+			line = inactiveMenuItemStyle.Render(cat)
+		}
+		items = append(items, line)
+	}
+
+	content := strings.Join(items, "\n")
+
+	selectedCategory := ""
+	if a.activeCatIndex < len(a.categories) {
+		selectedCategory = a.categories[a.activeCatIndex]
+	}
+
+	if selectedCategory == "Containers" && a.dockerDiskUsage != nil {
+		diskInfo := fmt.Sprintf("\n\nDisk: %s", formatBytes(a.dockerDiskUsage.Total))
+		content += subtleStyle.Render(diskInfo)
+	}
+
+	style := sidebarStyle
+	if a.focus == FocusSidebar {
+		style = style.Copy().BorderForeground(lipgloss.Color("#7D56F4"))
+	}
+
+	return style.Render(content)
+}
+
+// converts bytes to human-readable format.
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 var dashboardStyle = lipgloss.NewStyle().

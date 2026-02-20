@@ -76,6 +76,18 @@ func (s *Store) GetAll() []*Service {
 	return result
 }
 
+// returns services filtered by type, sorted by status and name.
+func (s *Store) GetByType(serviceType ServiceType) []*Service {
+	all := s.GetAll()
+	result := make([]*Service, 0)
+	for _, svc := range all {
+		if svc.Type == serviceType {
+			result = append(result, svc)
+		}
+	}
+	return result
+}
+
 // deletes a service by ID.
 func (s *Store) Remove(id string) {
 	delete(s.services, id)
