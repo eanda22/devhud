@@ -30,6 +30,7 @@ type Service struct {
 	PID         int
 	ContainerID string
 	Image       string
+	DBType      string
 	Uptime      time.Duration
 	StartTime   time.Time
 	Project     string

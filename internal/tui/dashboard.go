@@ -48,9 +48,14 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 		}
 		uptime := formatUptime(svc.Uptime)
 
+		serviceName := svc.Name
+		if svc.DBType != "" {
+			serviceName += " [DB]"
+		}
+
 		row := fmt.Sprintf("%-6s %-40s %-10s %-6s %-10s",
 			status,
-			truncate(svc.Name, 18),
+			truncate(serviceName, 18),
 			string(svc.Type),
 			port,
 			uptime,
@@ -147,6 +152,9 @@ func renderDetailPanel(svc *service.Service) string {
 
 // returns available action keys for a service type.
 func getServiceActions(svc *service.Service) string {
+	if svc.DBType != "" {
+		return "[s]tart [x]stop [r]estart [b]rowse db [l]ogs"
+	}
 	switch svc.Type {
 	case service.ServiceTypeDocker, service.ServiceTypeCompose:
 		return "[s]tart [x]stop [r]estart [d]elete [l]ogs"

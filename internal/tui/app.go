@@ -31,6 +31,8 @@ type App struct {
 	operatingOnID    string
 	mode             string
 	logsView         *LogsView
+	dbTablesView     *DBTablesView
+	dbDataView       *DBDataView
 	width            int
 	height           int
 }
@@ -154,6 +156,43 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	if a.mode == "db_tables" && a.dbTablesView != nil {
+		updatedView, cmd := a.dbTablesView.Update(msg)
+		a.dbTablesView = updatedView
+
+		if a.dbTablesView.shouldExit {
+			a.mode = "dashboard"
+			if a.dbTablesView.dbClient != nil {
+				a.dbTablesView.dbClient.Close()
+			}
+			a.dbTablesView = nil
+			return a, a.scanCmd()
+		}
+
+		if a.dbTablesView.openTable != "" {
+			tableName := a.dbTablesView.openTable
+			a.dbDataView = NewDBDataView(a.dbTablesView.service, tableName, a.dbTablesView.dbClient, a.width, a.height)
+			a.mode = "db_data"
+			a.dbTablesView.openTable = ""
+			return a, a.dbDataView.Init()
+		}
+
+		return a, cmd
+	}
+
+	if a.mode == "db_data" && a.dbDataView != nil {
+		updatedView, cmd := a.dbDataView.Update(msg)
+		a.dbDataView = updatedView
+
+		if a.dbDataView.shouldExit {
+			a.mode = "db_tables"
+			a.dbDataView = nil
+			return a, nil
+		}
+
+		return a, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
@@ -230,6 +269,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return a, a.restartServiceCmd(svc.ContainerID)
 				}
 			}
+		case "b":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				if svc.DBType != "" {
+					a.dbTablesView = NewDBTablesView(svc, a.dockerClient, a.width, a.height)
+					a.mode = "db_tables"
+					return a, a.dbTablesView.Init()
+				}
+			}
 		case "d":
 			services := a.services.GetAll()
 			if a.selectedIndex < len(services) {
@@ -270,6 +319,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) View() string {
 	if a.mode == "logs" && a.logsView != nil {
 		return a.logsView.View()
+	}
+	if a.mode == "db_tables" && a.dbTablesView != nil {
+		return a.dbTablesView.View()
+	}
+	if a.mode == "db_data" && a.dbDataView != nil {
+		return a.dbDataView.View()
 	}
 	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError, a.statusMessage, a.confirmOperation, a.operatingOnID)
 }

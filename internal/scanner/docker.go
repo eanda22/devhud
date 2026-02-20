@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/eanda22/devhud/internal/db"
 )
 
 type DockerScanner struct {
@@ -44,10 +45,11 @@ func (ds *DockerScanner) ListContainers(ctx context.Context) ([]ContainerInfo, e
 		}
 
 		found = append(found, ContainerInfo{
-			ID:    c.ID[:12],
-			Name:  name,
-			Image: imageName,
-			State: c.State,
+			ID:     c.ID[:12],
+			Name:   name,
+			Image:  imageName,
+			State:  c.State,
+			DBType: db.DetectType(imageName),
 		})
 	}
 
@@ -63,8 +65,9 @@ func (ds *DockerScanner) Close() error {
 }
 
 type ContainerInfo struct {
-	ID    string
-	Name  string
-	Image string
-	State string
+	ID     string
+	Name   string
+	Image  string
+	State  string
+	DBType string
 }

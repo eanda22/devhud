@@ -111,3 +111,8 @@ func (c *Client) Close() error {
 	}
 	return nil
 }
+
+// returns the underlying Docker client for direct API access.
+func (c *Client) GetRawClient() *client.Client {
+	return c.cli
+}
