@@ -153,7 +153,7 @@ func renderDetailPanel(svc *service.Service) string {
 // returns available action keys for a service type.
 func getServiceActions(svc *service.Service) string {
 	if svc.DBType != "" {
-		return "[s]tart [x]stop [r]estart [d]atabase [l]ogs"
+		return "[s]tart [x]stop [r]estart [b]rowse db [l]ogs"
 	}
 	switch svc.Type {
 	case service.ServiceTypeDocker, service.ServiceTypeCompose:

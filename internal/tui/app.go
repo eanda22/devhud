@@ -269,7 +269,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return a, a.restartServiceCmd(svc.ContainerID)
 				}
 			}
-		case "d":
+		case "b":
 			services := a.services.GetAll()
 			if a.selectedIndex < len(services) {
 				svc := services[a.selectedIndex]
@@ -278,6 +278,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.mode = "db_tables"
 					return a, a.dbTablesView.Init()
 				}
+			}
+		case "d":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
 				if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
 					a.confirmOperation = svc.ContainerID
 				}
