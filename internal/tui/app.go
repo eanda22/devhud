@@ -29,6 +29,10 @@ type App struct {
 	statusMessage    string
 	confirmOperation string
 	operatingOnID    string
+	mode             string
+	logsView         *LogsView
+	width            int
+	height           int
 }
 
 func NewApp() (*App, error) {
@@ -44,6 +48,7 @@ func NewApp() (*App, error) {
 		services:     store,
 		scanner:      scan,
 		dockerClient: dockerClient,
+		mode:         "dashboard",
 	}, nil
 }
 
@@ -138,7 +143,23 @@ func (a *App) stopProcessCmd(pid int) tea.Cmd {
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.mode == "logs" && a.logsView != nil {
+		updatedLogsView, cmd := a.logsView.Update(msg)
+		a.logsView = updatedLogsView
+		if a.logsView.shouldExit {
+			a.mode = "dashboard"
+			a.logsView = nil
+			return a, a.scanCmd()
+		}
+		return a, cmd
+	}
+
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.width = msg.Width
+		a.height = msg.Height
+		return a, nil
+
 	case tea.KeyMsg:
 		if a.confirmOperation != "" {
 			switch msg.String() {
@@ -217,6 +238,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.confirmOperation = svc.ContainerID
 				}
 			}
+		case "l":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				a.logsView = NewLogsView(svc, a.dockerClient, a.width, a.height)
+				a.mode = "logs"
+				return a, a.logsView.Init()
+			}
 
 		}
 
@@ -239,5 +268,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
+	if a.mode == "logs" && a.logsView != nil {
+		return a.logsView.View()
+	}
 	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError, a.statusMessage, a.confirmOperation, a.operatingOnID)
 }

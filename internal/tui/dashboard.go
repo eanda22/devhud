@@ -149,9 +149,9 @@ func renderDetailPanel(svc *service.Service) string {
 func getServiceActions(svc *service.Service) string {
 	switch svc.Type {
 	case service.ServiceTypeDocker, service.ServiceTypeCompose:
-		return "[s]tart [x]stop [r]estart [d]elete"
+		return "[s]tart [x]stop [r]estart [d]elete [l]ogs"
 	case service.ServiceTypeProcess:
-		return "[x]kill"
+		return "[x]kill [l]ogs"
 	default:
 		return ""
 	}
