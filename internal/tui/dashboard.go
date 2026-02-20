@@ -83,7 +83,7 @@ func renderServiceList(services []*service.Service, serviceIndex int, statusMess
 	if confirmOperation != "" {
 		footer += "⚠ Confirm delete? [y/N]\n"
 	} else {
-		footer += "[↑/↓] navigate  [s]tart [x]stop [r]estart [d]elete [q]uit\n"
+		footer += "[↑/↓] navigate [q]uit\n"
 		if statusMessage != "" {
 			footer += fmt.Sprintf("%s\n", statusMessage)
 		}
@@ -137,7 +137,24 @@ func renderDetailPanel(svc *service.Service) string {
 		)
 	}
 
+	actions := getServiceActions(svc)
+	if actions != "" {
+		serviceInfo += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Actions: ") + actions + "\n"
+	}
+
 	return dashboardStyle.Render(serviceInfo)
+}
+
+// returns available action keys for a service type.
+func getServiceActions(svc *service.Service) string {
+	switch svc.Type {
+	case service.ServiceTypeDocker, service.ServiceTypeCompose:
+		return "[s]tart [x]stop [r]estart [d]elete"
+	case service.ServiceTypeProcess:
+		return "[x]kill"
+	default:
+		return ""
+	}
 }
 
 // returns the appropriate icon for a service status.
