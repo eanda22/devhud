@@ -27,15 +27,18 @@ make build
 ./devhud
 ```
 
-## Features (Planned)
+## Features
 
-- Dashboard view of all running services
-- Docker container management
-- Process discovery and control
-- Multi-service log tailing with filtering
-- Database explorer and query runner
+- **Dashboard** - Interactive view of all running services with sidebar navigation and filtering
+- **Docker Management** - Start, stop, restart, delete containers; inspect and shell access
+- **Process Control** - Discover and manage local dev server processes
+- **Log Viewer** - Tail logs from Docker containers with scrolling support
+- **Database Explorer** - Browse tables and query data from containerized databases
+
+## Roadmap
+
 - Environment variable management
-- Port conflict detection
+- Port conflict detection and resolution
 
 ## Tech Stack
 

@@ -93,3 +93,12 @@ A feature or fix is done when:
 - Error cases are handled (no unhandled panics or nil derefs)
 - Degradation is graceful (failures don't cascade)
 - Changes are minimal (only code necessary for the task)
+
+## Documentation
+
+### README Maintenance
+- Keep README.md synchronized with implemented features
+- When adding a new feature, move it from Roadmap to Features section
+- When removing a feature, update README immediately
+- README should always reflect the current state of the codebase, not future plans
+- If you notice README is outdated, update it before implementing new features
