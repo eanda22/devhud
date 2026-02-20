@@ -1,28 +1,40 @@
 docker:
-  - internal/docker/**/*
-  - internal/service/*docker*
+  - changed-files:
+      - any-glob-to-any-file:
+          - internal/docker/**/*
+          - internal/service/*docker*
 
 database:
-  - internal/db/**/*
-  - cmd/*db*
+  - changed-files:
+      - any-glob-to-any-file:
+          - internal/db/**/*
+          - cmd/*db*
 
 tui:
-  - internal/tui/**/*
+  - changed-files:
+      - any-glob-to-any-file: internal/tui/**/*
 
 scanner:
-  - internal/scanner/**/*
+  - changed-files:
+      - any-glob-to-any-file: internal/scanner/**/*
 
 tests:
-  - '**/*_test.go'
+  - changed-files:
+      - any-glob-to-any-file: '**/*_test.go'
 
 documentation:
-  - '**.md'
-  - CLAUDE.md
-  - README.md
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**.md'
+          - CLAUDE.md
+          - README.md
 
 github:
-  - .github/**/*
+  - changed-files:
+      - any-glob-to-any-file: .github/**/*
 
 dependencies:
-  - go.mod
-  - go.sum
+  - changed-files:
+      - any-glob-to-any-file:
+          - go.mod
+          - go.sum
