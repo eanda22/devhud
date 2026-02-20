@@ -39,7 +39,7 @@ func DiscoverConfig(ctx context.Context, dockerClient *client.Client, containerI
 
 	switch dbType {
 	case "postgres":
-		config.User = getEnv(envMap, "POSTGRES_USER", "postgres")
+		config.User = "postgres"
 		config.Password = getEnv(envMap, "POSTGRES_PASSWORD", "")
 		config.Database = getEnv(envMap, "POSTGRES_DB", "postgres")
 	case "mysql":
