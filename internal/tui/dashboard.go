@@ -10,7 +10,7 @@ import (
 )
 
 // renders the main service list and detail panel.
-func RenderDashboard(services []*service.Service, serviceIndex int, lastError error) string {
+func RenderDashboard(services []*service.Service, serviceIndex int, lastError error, statusMessage string, confirmOperation string, operatingOnID string) string {
 	if len(services) == 0 {
 		msg := "No services discovered. Scanning..."
 		if lastError != nil {
@@ -19,7 +19,7 @@ func RenderDashboard(services []*service.Service, serviceIndex int, lastError er
 		return dashboardStyle.Render(msg)
 	}
 
-	servicesList, detailPanel := renderServiceList(services, serviceIndex)
+	servicesList, detailPanel := renderServiceList(services, serviceIndex, statusMessage, confirmOperation, operatingOnID)
 
 	if detailPanel != "" {
 		return lipgloss.JoinHorizontal(
@@ -33,7 +33,7 @@ func RenderDashboard(services []*service.Service, serviceIndex int, lastError er
 }
 
 // renders the service table with header and footer.
-func renderServiceList(services []*service.Service, serviceIndex int) (string, string) {
+func renderServiceList(services []*service.Service, serviceIndex int, statusMessage string, confirmOperation string, operatingOnID string) (string, string) {
 	header := fmt.Sprintf("%-6s %-40s %-10s %-6s %-10s\n",
 		"STATUS", "NAME", "TYPE", "PORT", "UPTIME")
 
@@ -61,7 +61,17 @@ func renderServiceList(services []*service.Service, serviceIndex int) (string, s
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Bold(true)
 
-		if i == serviceIndex {
+		var operatingStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#FFA500")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true)
+
+		if svc.ID == operatingOnID && operatingOnID != "" {
+			row = operatingStyle.Render(row)
+			if i == serviceIndex {
+				detailPanel = renderDetailPanel(svc)
+			}
+		} else if i == serviceIndex {
 			row = selectedStyle.Render(row)
 			detailPanel = renderDetailPanel(svc)
 		}
@@ -69,7 +79,16 @@ func renderServiceList(services []*service.Service, serviceIndex int) (string, s
 		rows = append(rows, row+"\n")
 	}
 
-	footer := "\n[↑/↓] navigate  [q]uit\n"
+	footer := "\n"
+	if confirmOperation != "" {
+		footer += "⚠ Confirm delete? [y/N]\n"
+	} else {
+		footer += "[↑/↓] navigate  [s]tart [x]stop [r]estart [d]elete [q]uit\n"
+		if statusMessage != "" {
+			footer += fmt.Sprintf("%s\n", statusMessage)
+		}
+	}
+
 	servicesList := header + strings.Join(rows, "") + footer
 
 	return servicesList, detailPanel

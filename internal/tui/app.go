@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/eanda22/devhud/internal/docker"
+	"github.com/eanda22/devhud/internal/process"
 	"github.com/eanda22/devhud/internal/scanner"
 	"github.com/eanda22/devhud/internal/service"
 )
@@ -18,11 +20,15 @@ type ScanCompleteMsg struct {
 type TickMsg struct{}
 
 type App struct {
-	services      *service.Store
-	scanner       *scanner.Scanner
-	ticker        *time.Ticker
-	selectedIndex int
-	lastError     error
+	services         *service.Store
+	scanner          *scanner.Scanner
+	dockerClient     *docker.Client
+	ticker           *time.Ticker
+	selectedIndex    int
+	lastError        error
+	statusMessage    string
+	confirmOperation string
+	operatingOnID    string
 }
 
 func NewApp() (*App, error) {
@@ -32,9 +38,12 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("scanner: %w", err)
 	}
 
+	dockerClient, _ := docker.NewClient()
+
 	return &App{
-		services: store,
-		scanner:  scan,
+		services:     store,
+		scanner:      scan,
+		dockerClient: dockerClient,
 	}, nil
 }
 
@@ -66,11 +75,96 @@ func (a *App) tickCmd() tea.Cmd {
 	})
 }
 
+// starts a Docker container.
+func (a *App) startServiceCmd(containerID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.dockerClient == nil {
+			return OperationCompleteMsg{Success: false, Message: "Docker unavailable"}
+		}
+		if err := a.dockerClient.Start(containerID); err != nil {
+			return OperationCompleteMsg{Success: false, Message: fmt.Sprintf("Start failed: %v", err)}
+		}
+		return OperationCompleteMsg{Success: true, Message: "Container started"}
+	}
+}
+
+// stops a Docker container.
+func (a *App) stopServiceCmd(containerID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.dockerClient == nil {
+			return OperationCompleteMsg{Success: false, Message: "Docker unavailable"}
+		}
+		if err := a.dockerClient.Stop(containerID); err != nil {
+			return OperationCompleteMsg{Success: false, Message: fmt.Sprintf("Stop failed: %v", err)}
+		}
+		return OperationCompleteMsg{Success: true, Message: "Container stopped"}
+	}
+}
+
+// restarts a Docker container.
+func (a *App) restartServiceCmd(containerID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.dockerClient == nil {
+			return OperationCompleteMsg{Success: false, Message: "Docker unavailable"}
+		}
+		if err := a.dockerClient.Restart(containerID); err != nil {
+			return OperationCompleteMsg{Success: false, Message: fmt.Sprintf("Restart failed: %v", err)}
+		}
+		return OperationCompleteMsg{Success: true, Message: "Container restarted"}
+	}
+}
+
+// deletes a Docker container.
+func (a *App) deleteServiceCmd(containerID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.dockerClient == nil {
+			return OperationCompleteMsg{Success: false, Message: "Docker unavailable"}
+		}
+		if err := a.dockerClient.Remove(containerID); err != nil {
+			return OperationCompleteMsg{Success: false, Message: fmt.Sprintf("Delete failed: %v", err)}
+		}
+		return OperationCompleteMsg{Success: true, Message: "Container deleted"}
+	}
+}
+
+// stops a process with SIGTERM.
+func (a *App) stopProcessCmd(pid int) tea.Cmd {
+	return func() tea.Msg {
+		if err := process.Stop(pid); err != nil {
+			return OperationCompleteMsg{Success: false, Message: fmt.Sprintf("Stop failed: %v", err)}
+		}
+		return OperationCompleteMsg{Success: true, Message: "Process stopped"}
+	}
+}
+
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if a.confirmOperation != "" {
+			switch msg.String() {
+			case "y", "Y":
+				containerID := a.confirmOperation
+				services := a.services.GetAll()
+				if a.selectedIndex < len(services) {
+					a.operatingOnID = services[a.selectedIndex].ID
+				}
+				a.confirmOperation = ""
+				a.statusMessage = "Deleting container..."
+				return a, a.deleteServiceCmd(containerID)
+			case "n", "N":
+				a.confirmOperation = ""
+				a.statusMessage = "Delete cancelled"
+			default:
+				a.confirmOperation = ""
+			}
+			return a, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
+			if a.dockerClient != nil {
+				a.dockerClient.Close()
+			}
 			a.scanner.Close()
 			return a, tea.Quit
 		case "up", "k":
@@ -81,6 +175,48 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.selectedIndex < len(a.services.GetAll())-1 {
 				a.selectedIndex++
 			}
+		case "s":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+					a.statusMessage = "Starting container..."
+					a.operatingOnID = svc.ID
+					return a, a.startServiceCmd(svc.ContainerID)
+				}
+			}
+		case "x":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+					a.statusMessage = "Stopping container..."
+					a.operatingOnID = svc.ID
+					return a, a.stopServiceCmd(svc.ContainerID)
+				} else if svc.Type == service.ServiceTypeProcess {
+					a.statusMessage = "Stopping process..."
+					a.operatingOnID = svc.ID
+					return a, a.stopProcessCmd(svc.PID)
+				}
+			}
+		case "r":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+					a.statusMessage = "Restarting container..."
+					a.operatingOnID = svc.ID
+					return a, a.restartServiceCmd(svc.ContainerID)
+				}
+			}
+		case "d":
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+					a.confirmOperation = svc.ContainerID
+				}
+			}
 
 		}
 
@@ -90,6 +226,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case OperationCompleteMsg:
+		a.statusMessage = msg.Message
+		a.operatingOnID = ""
+		return a, a.scanCmd()
+
 	case TickMsg:
 		return a, a.scanCmd()
 	}
@@ -98,5 +239,5 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
-	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError)
+	return RenderDashboard(a.services.GetAll(), a.selectedIndex, a.lastError, a.statusMessage, a.confirmOperation, a.operatingOnID)
 }
