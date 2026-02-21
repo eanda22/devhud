@@ -10,7 +10,11 @@ import (
 	"github.com/eanda22/devhud/internal/service"
 )
 
-const Version = "0.2.0"
+const (
+	Version      = "0.2.0"
+	sidebarWidth = 25
+	detailWidth  = 30
+)
 
 func renderHeader(category string) string {
 	return lipgloss.NewStyle().
@@ -19,138 +23,213 @@ func renderHeader(category string) string {
 		Render(fmt.Sprintf("DEVHUD v%s | %s", Version, category))
 }
 
-// renders the main service list and detail panel.
 func RenderDashboard(a *App) string {
 	services := a.getFilteredServices()
+	panelHeight := a.height - 2
 
 	if len(services) == 0 {
 		msg := "No services discovered. Scanning..."
 		if a.lastError != nil {
 			msg += fmt.Sprintf("\nLast error: %v", a.lastError)
 		}
-		return dashboardStyle.Render(msg)
+		style := dashboardStyle.Copy().Height(panelHeight).Width(a.width - sidebarWidth - 6)
+		return lipgloss.JoinHorizontal(lipgloss.Top, renderSidebar(a, panelHeight), style.Render(msg))
 	}
 
-	sidebar := renderSidebar(a)
+	sidebar := renderSidebar(a, panelHeight)
 
 	selectedCategory := ""
 	if a.activeCatIndex < len(a.categories) {
 		selectedCategory = a.categories[a.activeCatIndex]
 	}
-	header := renderHeader(selectedCategory)
 
-	servicesList, detailPanel := renderServiceList(
-		services,
-		a.activeCatIndex,
-		a.selectedIndex,
-		a.focus,
-		a.confirmOperation,
-		a.operatingOnID,
-		a.dockerDiskUsage,
-		a.statusMessage,
-	)
+	mainWidth := a.width - sidebarWidth - 6
+	if a.showDetailPanel {
+		mainWidth = a.width - sidebarWidth - detailWidth - 10
+	}
 
-	mainContent := dashboardStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, servicesList))
+	mainContent := renderMainPanel(a, services, selectedCategory, mainWidth, panelHeight)
 
-	if detailPanel != "" {
-		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, mainContent, detailPanel)
+	if a.showDetailPanel && a.selectedIndex < len(services) {
+		detail := renderDetailPanel(services[a.selectedIndex], panelHeight)
+		return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent, detail)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent)
 }
 
-// renders the service table with header and footer.
-func renderServiceList(
+func renderMainPanel(a *App, services []*service.Service, category string, width, height int) string {
+	header := renderHeader(category)
+	rows := buildServiceRows(services, a.activeCatIndex, a.selectedIndex, a.focus, a.operatingOnID, a.dockerDiskUsage)
+
+	var footer string
+	var footerLines int
+	if a.mode == "action_menu" && a.actionMenuView != nil {
+		footer = renderInlineActionMenu(a.actionMenuView)
+		footerLines = len(a.actionMenuView.actions) + 9
+	} else {
+		footer = buildFooter(a.focus, a.confirmOperation, a.statusMessage)
+		footerLines = 2
+	}
+
+	contentHeight := height - 4
+	maxRows := contentHeight - footerLines - 1
+
+	start, end := visibleWindow(len(rows), a.selectedIndex, maxRows)
+	visibleRows := buildVisibleRows(rows, start, end)
+
+	usedLines := 1 + len(visibleRows) + footerLines
+	padLines := contentHeight - usedLines
+	if padLines < 0 {
+		padLines = 0
+	}
+	padding := strings.Repeat("\n", padLines)
+
+	content := header + "\n" + strings.Join(visibleRows, "") + padding + footer
+	style := dashboardStyle.Copy().Width(width).Height(height)
+	return style.Render(content)
+}
+
+func buildVisibleRows(rows []string, start, end int) []string {
+	var visible []string
+	if start > 0 {
+		visible = append(visible, subtleStyle.Render(fmt.Sprintf("  ↑ %d more", start))+"\n")
+	}
+	visible = append(visible, rows[start:end]...)
+	if end < len(rows) {
+		visible = append(visible, subtleStyle.Render(fmt.Sprintf("  ↓ %d more", len(rows)-end))+"\n")
+	}
+	return visible
+}
+
+func renderInlineActionMenu(a *ActionMenuView) string {
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true).
+		Render("Actions: " + a.service.Name)
+
+	var items []string
+	for i, action := range a.actions {
+		if i == a.selectedIndex {
+			items = append(items, selectedActionStyle.Render("> "+action))
+		} else {
+			items = append(items, unselectedActionStyle.Render("  "+action))
+		}
+	}
+
+	hint := subtleStyle.Render("[↑/↓] Select   [Enter] Execute   [Esc] Cancel")
+
+	box := actionMenuBoxStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left, title, "", strings.Join(items, "\n"), "", hint),
+	)
+
+	return "\n" + box
+}
+
+func buildServiceRows(
 	services []*service.Service,
 	activeCatIndex int,
 	selectedIndex int,
 	focus Focus,
-	confirmOperation string,
 	operatingOnID string,
 	dockerDiskUsage *docker.DiskUsage,
-	statusMessage string,
-) (string, string) {
-	// Column header: DISK for Containers(0) and Databases(2), PORT for Local Procs(1)
+) []string {
 	diskOrPortHeader := "DISK"
 	if activeCatIndex == 1 {
 		diskOrPortHeader = "PORT"
 	}
 
-	header := fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s\n",
+	headerLine := fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s\n",
 		"STATUS", "NAME", "TYPE", diskOrPortHeader, "UPTIME")
 
-	var detailPanel string
-	rows := []string{}
+	rows := []string{headerLine}
 
 	for i, svc := range services {
-		status := statusIcon(svc.Status)
-		uptime := formatUptime(svc.Uptime)
-
-		serviceName := svc.Name
-		if svc.DBType != "" {
-			serviceName += " [DB]"
-		}
-
-		var diskColumn string
-		if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
-			if dockerDiskUsage != nil && dockerDiskUsage.ContainerSizes != nil {
-				if size, ok := dockerDiskUsage.ContainerSizes[svc.ContainerID]; ok {
-					diskColumn = formatBytes(size)
-				} else {
-					diskColumn = "-"
-				}
-			} else {
-				diskColumn = "-"
-			}
-		} else {
-			port := fmt.Sprintf("%d", svc.Port)
-			if svc.Port == 0 {
-				port = "-"
-			}
-			diskColumn = port
-		}
-
-		row := fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s",
-			status,
-			truncate(serviceName, 38),
-			string(svc.Type),
-			diskColumn,
-			uptime,
-		)
+		row := formatServiceRow(svc, activeCatIndex, dockerDiskUsage)
 
 		if svc.ID == operatingOnID && operatingOnID != "" {
 			row = operatingRowStyle.Render(row)
-			if i == selectedIndex && focus == FocusMainList {
-				detailPanel = renderDetailPanel(svc)
-			}
 		} else if i == selectedIndex && focus == FocusMainList {
 			row = selectedRowStyle.Render(row)
-			detailPanel = renderDetailPanel(svc)
 		}
 
 		rows = append(rows, row+"\n")
 	}
 
+	return rows
+}
+
+func formatServiceRow(svc *service.Service, activeCatIndex int, dockerDiskUsage *docker.DiskUsage) string {
+	status := statusIcon(svc.Status)
+	uptime := formatUptime(svc.Uptime)
+
+	serviceName := svc.Name
+	if svc.DBType != "" {
+		serviceName += " [DB]"
+	}
+
+	diskColumn := getDiskColumn(svc, dockerDiskUsage)
+
+	return fmt.Sprintf("%-6s %-40s %-10s %-10s %-10s",
+		status,
+		truncate(serviceName, 38),
+		string(svc.Type),
+		diskColumn,
+		uptime,
+	)
+}
+
+func getDiskColumn(svc *service.Service, dockerDiskUsage *docker.DiskUsage) string {
+	if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+		if dockerDiskUsage != nil && dockerDiskUsage.ContainerSizes != nil {
+			if size, ok := dockerDiskUsage.ContainerSizes[svc.ContainerID]; ok {
+				return formatBytes(size)
+			}
+		}
+		return "-"
+	}
+	if svc.Port == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d", svc.Port)
+}
+
+func buildFooter(focus Focus, confirmOperation string, statusMessage string) string {
 	footer := "\n"
 	if confirmOperation != "" {
 		footer += "⚠ Confirm delete? [y/N]\n"
 	} else {
 		if focus == FocusSidebar {
-			footer += "[↑/↓] Navigate   [→] Select   [q] Quit\n"
+			footer += "[↑/↓] Navigate   [→] Select   [Tab] Details   [q] Quit\n"
 		} else {
-			footer += "[↑/↓] Navigate   [←] Back   [Enter] Actions   [q] Quit\n"
+			footer += "[↑/↓] Navigate   [←] Back   [Enter] Actions   [Tab] Details   [q] Quit\n"
 		}
 		if statusMessage != "" {
 			footer += fmt.Sprintf("%s\n", statusMessage)
 		}
 	}
-
-	servicesList := header + strings.Join(rows, "") + footer
-
-	return servicesList, detailPanel
+	return footer
 }
 
-func renderDetailPanel(svc *service.Service) string {
+func visibleWindow(totalItems, selectedIndex, maxVisible int) (int, int) {
+	if totalItems <= maxVisible {
+		return 0, totalItems
+	}
+
+	half := maxVisible / 2
+	start := selectedIndex - half
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxVisible
+	if end > totalItems {
+		end = totalItems
+		start = end - maxVisible
+	}
+	return start, end
+}
+
+func renderDetailPanel(svc *service.Service, height int) string {
 	var serviceInfo string
 
 	switch svc.Type {
@@ -192,10 +271,10 @@ func renderDetailPanel(svc *service.Service) string {
 		)
 	}
 
-	return dashboardStyle.Render(serviceInfo)
+	style := dashboardStyle.Copy().Width(detailWidth).Height(height)
+	return style.Render(serviceInfo)
 }
 
-// returns the appropriate icon for a service status.
 func statusIcon(s service.Status) string {
 	switch s {
 	case service.StatusRunning:
@@ -209,7 +288,6 @@ func statusIcon(s service.Status) string {
 	}
 }
 
-// converts duration to human-readable uptime string.
 func formatUptime(d time.Duration) string {
 	if d == 0 {
 		return "-"
@@ -222,7 +300,6 @@ func formatUptime(d time.Duration) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// shortens strings exceeding max length with ellipsis.
 func truncate(s string, maxLen int) string {
 	if len(s) > maxLen {
 		return s[:maxLen-1] + "…"
@@ -230,8 +307,7 @@ func truncate(s string, maxLen int) string {
 	return s
 }
 
-// renders the sidebar with categories.
-func renderSidebar(a *App) string {
+func renderSidebar(a *App, panelHeight int) string {
 	var items []string
 
 	for i, cat := range a.categories {
@@ -246,25 +322,34 @@ func renderSidebar(a *App) string {
 
 	content := strings.Join(items, "\n")
 
+	var diskInfo string
 	selectedCategory := ""
 	if a.activeCatIndex < len(a.categories) {
 		selectedCategory = a.categories[a.activeCatIndex]
 	}
-
 	if selectedCategory == "Containers" && a.dockerDiskUsage != nil {
-		diskInfo := fmt.Sprintf("\n\nDisk: %s", formatBytes(a.dockerDiskUsage.Total))
-		content += subtleStyle.Render(diskInfo)
+		diskInfo = subtleStyle.Render(fmt.Sprintf("Disk: %s", formatBytes(a.dockerDiskUsage.Total)))
 	}
 
-	style := sidebarStyle
+	if diskInfo != "" {
+		contentLines := strings.Count(content, "\n") + 1
+		diskLines := 1
+		innerHeight := panelHeight - 2
+		padCount := innerHeight - contentLines - diskLines
+		if padCount < 2 {
+			padCount = 2
+		}
+		content += strings.Repeat("\n", padCount) + diskInfo
+	}
+
+	style := sidebarStyle.Copy().Height(panelHeight)
 	if a.focus == FocusSidebar {
-		style = style.Copy().BorderForeground(lipgloss.Color("#7D56F4"))
+		style = style.BorderForeground(lipgloss.Color("#7D56F4"))
 	}
 
 	return style.Render(content)
 }
 
-// converts bytes to human-readable format.
 func formatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {

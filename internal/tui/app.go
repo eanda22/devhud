@@ -47,6 +47,7 @@ type App struct {
 	categories       []string
 	activeCatIndex   int
 	dockerDiskUsage  *docker.DiskUsage
+	showDetailPanel  bool
 }
 
 type Focus int
@@ -377,6 +378,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
+		if msg.String() == "tab" {
+			a.showDetailPanel = !a.showDetailPanel
+			return a, nil
+		}
+
 		if a.focus == FocusSidebar {
 			switch msg.String() {
 			case "up", "k":
@@ -446,9 +452,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
-	if a.mode == "action_menu" && a.actionMenuView != nil {
-		return a.actionMenuView.View()
-	}
 	if a.mode == "logs" && a.logsView != nil {
 		return a.logsView.View()
 	}
