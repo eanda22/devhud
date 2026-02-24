@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/eanda22/devhud/internal/docker"
 	"github.com/eanda22/devhud/internal/process"
@@ -50,6 +52,8 @@ type App struct {
 	dockerDiskUsage  *docker.DiskUsage
 	showDetailPanel  bool
 	waitingForG      bool
+	searchInput      textinput.Model
+	searchFilter     string
 }
 
 type Focus int
@@ -76,6 +80,11 @@ func NewApp() (*App, error) {
 
 	dockerClient, _ := docker.NewClient()
 
+	si := textinput.New()
+	si.Placeholder = "Search services..."
+	si.CharLimit = 64
+	si.Prompt = "/"
+
 	return &App{
 		services:       store,
 		scanner:        scan,
@@ -84,6 +93,7 @@ func NewApp() (*App, error) {
 		categories:     []string{"Containers", "Local Procs", "Databases"},
 		activeCatIndex: 0,
 		focus:          FocusSidebar,
+		searchInput:    si,
 	}, nil
 }
 
@@ -254,6 +264,17 @@ func (a *App) executeActionFromMenu(actionName string, svc *service.Service) tea
 
 // returns services filtered by active category.
 func (a *App) getFilteredServices() []*service.Service {
+	if a.searchFilter != "" {
+		filter := strings.ToLower(a.searchFilter)
+		var services []*service.Service
+		for _, svc := range a.services.GetAll() {
+			if strings.Contains(strings.ToLower(svc.Name), filter) {
+				services = append(services, svc)
+			}
+		}
+		return services
+	}
+
 	if a.activeCatIndex == 0 {
 		containers := append(
 			a.services.GetByType(service.ServiceTypeDocker),
@@ -290,6 +311,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if _, ok := msg.(tea.KeyMsg); !ok {
+		if a.inputMode == ModeSearch {
+			return a.updateSearchMode(msg)
+		}
 		return a.updateMessages(msg)
 	}
 
@@ -448,6 +472,13 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch keyMsg.String() {
+	case "esc":
+		if a.searchFilter != "" {
+			a.searchFilter = ""
+			a.searchInput.SetValue("")
+			a.selectedIndex = 0
+			return a, nil
+		}
 	case "tab":
 		a.showDetailPanel = !a.showDetailPanel
 		return a, nil
@@ -456,7 +487,9 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case "/":
 		a.inputMode = ModeSearch
-		return a, nil
+		a.searchInput.SetValue(a.searchFilter)
+		a.searchInput.Focus()
+		return a, a.searchInput.Cursor.BlinkCmd()
 	case "1":
 		a.activeCatIndex = 0
 		a.selectedIndex = 0
@@ -599,10 +632,26 @@ func (a *App) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) updateSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
-		a.inputMode = ModeNormal
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
+		case "enter":
+			a.searchFilter = a.searchInput.Value()
+			a.inputMode = ModeNormal
+			a.selectedIndex = 0
+			return a, nil
+		case "esc":
+			a.searchFilter = ""
+			a.searchInput.SetValue("")
+			a.inputMode = ModeNormal
+			return a, nil
+		}
 	}
-	return a, nil
+
+	var cmd tea.Cmd
+	a.searchInput, cmd = a.searchInput.Update(msg)
+	a.searchFilter = a.searchInput.Value()
+	a.selectedIndex = 0
+	return a, cmd
 }
 
 func (a *App) View() string {

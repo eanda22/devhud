@@ -39,7 +39,9 @@ func RenderDashboard(a *App) string {
 	sidebar := renderSidebar(a, panelHeight)
 
 	selectedCategory := ""
-	if a.activeCatIndex < len(a.categories) {
+	if a.searchFilter != "" {
+		selectedCategory = fmt.Sprintf("Search: %s", a.searchFilter)
+	} else if a.activeCatIndex < len(a.categories) {
 		selectedCategory = a.categories[a.activeCatIndex]
 	}
 
@@ -207,9 +209,12 @@ func buildStatusLine(a *App) string {
 		hints = "Type command  [Esc] Cancel"
 	case ModeSearch:
 		mode = searchModeStyle.Render(" SEARCH ")
-		hints = "Type to filter  [Enter] Lock  [Esc] Cancel"
+		hints = a.searchInput.View() + "  [Enter] Lock  [Esc] Cancel"
 	default:
 		mode = normalModeStyle.Render(" NORMAL ")
+		if a.searchFilter != "" {
+			mode += "  " + subtleStyle.Render("filter: "+a.searchFilter+" [/ edit, Esc clear]")
+		}
 		if a.focus == FocusSidebar {
 			hints = "[j/k] Nav  [l] Select  [Tab] Details  [/] Search  [:] Cmd"
 		} else {
