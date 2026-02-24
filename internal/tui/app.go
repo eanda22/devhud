@@ -49,6 +49,7 @@ type App struct {
 	activeCatIndex   int
 	dockerDiskUsage  *docker.DiskUsage
 	showDetailPanel  bool
+	waitingForG      bool
 }
 
 type Focus int
@@ -273,6 +274,14 @@ func (a *App) getFilteredServices() []*service.Service {
 	return a.services.GetAll()
 }
 
+func (a *App) selectedService() *service.Service {
+	services := a.getFilteredServices()
+	if a.selectedIndex >= len(services) {
+		return nil
+	}
+	return services[a.selectedIndex]
+}
+
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wmsg, ok := msg.(tea.WindowSizeMsg); ok {
 		a.width = wmsg.Width
@@ -448,6 +457,21 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "/":
 		a.inputMode = ModeSearch
 		return a, nil
+	case "1":
+		a.activeCatIndex = 0
+		a.selectedIndex = 0
+		a.focus = FocusMainList
+		return a, a.fetchDiskUsageCmd()
+	case "2":
+		a.activeCatIndex = 1
+		a.selectedIndex = 0
+		a.focus = FocusMainList
+		return a, nil
+	case "3":
+		a.activeCatIndex = 2
+		a.selectedIndex = 0
+		a.focus = FocusMainList
+		return a, a.fetchDiskUsageCmd()
 	}
 
 	if a.focus == FocusSidebar {
@@ -472,6 +496,10 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.focus = FocusMainList
 		}
 	} else {
+		if keyMsg.String() != "g" {
+			a.waitingForG = false
+		}
+
 		switch keyMsg.String() {
 		case "left", "h":
 			a.focus = FocusSidebar
@@ -491,6 +519,72 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.mode = "action_menu"
 				return a, a.actionMenuView.Init()
 			}
+		case "s":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+				if svc.Status == service.StatusRunning {
+					return a, a.executeActionFromMenu("Stop Container", svc)
+				}
+				return a, a.executeActionFromMenu("Start Container", svc)
+			}
+			if svc.Type == service.ServiceTypeProcess {
+				return a, a.executeActionFromMenu("Kill Process", svc)
+			}
+			a.statusMessage = "No stop/start action for this service"
+			return a, nil
+		case "r":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+				return a, a.executeActionFromMenu("Restart Container", svc)
+			}
+			a.statusMessage = "Restart not available"
+			return a, nil
+		case "l":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			return a, a.executeActionFromMenu("View Logs", svc)
+		case "d":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+				return a, a.executeActionFromMenu("Delete Container", svc)
+			}
+			a.statusMessage = "Delete not available"
+			return a, nil
+		case "i":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			if svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose {
+				return a, a.executeActionFromMenu("Inspect JSON", svc)
+			}
+			a.statusMessage = "Inspect not available"
+			return a, nil
+		case "G":
+			services := a.getFilteredServices()
+			if len(services) > 0 {
+				a.selectedIndex = len(services) - 1
+			}
+			return a, nil
+		case "g":
+			if a.waitingForG {
+				a.selectedIndex = 0
+				a.waitingForG = false
+				return a, nil
+			}
+			a.waitingForG = true
+			return a, nil
 		}
 	}
 
