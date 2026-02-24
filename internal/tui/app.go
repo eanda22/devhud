@@ -44,6 +44,7 @@ type App struct {
 	width            int
 	height           int
 	focus            Focus
+	inputMode        InputMode
 	categories       []string
 	activeCatIndex   int
 	dockerDiskUsage  *docker.DiskUsage
@@ -55,6 +56,14 @@ type Focus int
 const (
 	FocusSidebar Focus = iota
 	FocusMainList
+)
+
+type InputMode int
+
+const (
+	ModeNormal InputMode = iota
+	ModeCommand
+	ModeSearch
 )
 
 func NewApp() (*App, error) {
@@ -265,6 +274,41 @@ func (a *App) getFilteredServices() []*service.Service {
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if wmsg, ok := msg.(tea.WindowSizeMsg); ok {
+		a.width = wmsg.Width
+		a.height = wmsg.Height
+		return a, nil
+	}
+
+	if _, ok := msg.(tea.KeyMsg); !ok {
+		return a.updateMessages(msg)
+	}
+
+	keyMsg := msg.(tea.KeyMsg)
+	switch keyMsg.String() {
+	case "q", "ctrl+c":
+		if a.dockerClient != nil {
+			a.dockerClient.Close()
+		}
+		a.scanner.Close()
+		return a, tea.Quit
+	}
+
+	if cmd, handled := a.updateFullScreenView(msg); handled {
+		return a, cmd
+	}
+
+	switch a.inputMode {
+	case ModeCommand:
+		return a.updateCommandMode(msg)
+	case ModeSearch:
+		return a.updateSearchMode(msg)
+	default:
+		return a.updateNormalMode(msg)
+	}
+}
+
+func (a *App) updateFullScreenView(msg tea.Msg) (tea.Cmd, bool) {
 	if a.mode == "action_menu" && a.actionMenuView != nil {
 		updatedView, cmd := a.actionMenuView.Update(msg)
 		a.actionMenuView = updatedView
@@ -273,14 +317,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.actionMenuView.executeAction != "" {
 				actionCmd := a.executeActionFromMenu(a.actionMenuView.executeAction, a.actionMenuView.service)
 				a.actionMenuView = nil
-				return a, actionCmd
+				return actionCmd, true
 			}
 			a.mode = "dashboard"
 			a.actionMenuView = nil
-			return a, nil
+			return nil, true
 		}
 
-		return a, cmd
+		return cmd, true
 	}
 
 	if a.mode == "logs" && a.logsView != nil {
@@ -289,9 +333,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.logsView.shouldExit {
 			a.mode = "dashboard"
 			a.logsView = nil
-			return a, a.scanCmd()
+			return a.scanCmd(), true
 		}
-		return a, cmd
+		return cmd, true
 	}
 
 	if a.mode == "inspect" && a.inspectView != nil {
@@ -300,9 +344,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.inspectView.shouldExit {
 			a.mode = "dashboard"
 			a.inspectView = nil
-			return a, a.scanCmd()
+			return a.scanCmd(), true
 		}
-		return a, cmd
+		return cmd, true
 	}
 
 	if a.mode == "db_tables" && a.dbTablesView != nil {
@@ -315,7 +359,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.dbTablesView.dbClient.Close()
 			}
 			a.dbTablesView = nil
-			return a, a.scanCmd()
+			return a.scanCmd(), true
 		}
 
 		if a.dbTablesView.openTable != "" {
@@ -323,10 +367,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.dbDataView = NewDBDataView(a.dbTablesView.service, tableName, a.dbTablesView.dbClient, a.width, a.height)
 			a.mode = "db_data"
 			a.dbTablesView.openTable = ""
-			return a, a.dbDataView.Init()
+			return a.dbDataView.Init(), true
 		}
 
-		return a, cmd
+		return cmd, true
 	}
 
 	if a.mode == "db_data" && a.dbDataView != nil {
@@ -336,97 +380,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.dbDataView.shouldExit {
 			a.mode = "db_tables"
 			a.dbDataView = nil
-			return a, nil
+			return nil, true
 		}
 
-		return a, cmd
+		return cmd, true
 	}
 
+	return nil, false
+}
+
+func (a *App) updateMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
-		return a, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			if a.dockerClient != nil {
-				a.dockerClient.Close()
-			}
-			a.scanner.Close()
-			return a, tea.Quit
-		}
-
-		if a.confirmOperation != "" {
-			switch msg.String() {
-			case "y", "Y":
-				containerID := a.confirmOperation
-				services := a.services.GetAll()
-				if a.selectedIndex < len(services) {
-					a.operatingOnID = services[a.selectedIndex].ID
-				}
-				a.confirmOperation = ""
-				a.statusMessage = "Deleting container..."
-				return a, a.deleteServiceCmd(containerID)
-			case "n", "N":
-				a.confirmOperation = ""
-				a.statusMessage = "Delete cancelled"
-			default:
-				a.confirmOperation = ""
-			}
-			return a, nil
-		}
-
-		if msg.String() == "tab" {
-			a.showDetailPanel = !a.showDetailPanel
-			return a, nil
-		}
-
-		if a.focus == FocusSidebar {
-			switch msg.String() {
-			case "up", "k":
-				if a.activeCatIndex > 0 {
-					a.activeCatIndex--
-					a.selectedIndex = 0
-					if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
-						return a, a.fetchDiskUsageCmd()
-					}
-				}
-			case "down", "j":
-				if a.activeCatIndex < len(a.categories)-1 {
-					a.activeCatIndex++
-					a.selectedIndex = 0
-					if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
-						return a, a.fetchDiskUsageCmd()
-					}
-				}
-			case "enter", "right", "l":
-				a.focus = FocusMainList
-			}
-		} else {
-			switch msg.String() {
-			case "left", "h":
-				a.focus = FocusSidebar
-			case "up", "k":
-				if a.selectedIndex > 0 {
-					a.selectedIndex--
-				}
-			case "down", "j":
-				if a.selectedIndex < len(a.getFilteredServices())-1 {
-					a.selectedIndex++
-				}
-			case "enter":
-				services := a.getFilteredServices()
-				if a.selectedIndex < len(services) {
-					svc := services[a.selectedIndex]
-					a.actionMenuView = NewActionMenuView(svc, a.dockerClient, a.width, a.height)
-					a.mode = "action_menu"
-					return a, a.actionMenuView.Init()
-				}
-			}
-		}
-
 	case ScanCompleteMsg:
 		if msg.Error != nil {
 			a.lastError = msg.Error
@@ -448,6 +412,102 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	return a, nil
+}
+
+func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg := msg.(tea.KeyMsg)
+
+	if a.confirmOperation != "" {
+		switch keyMsg.String() {
+		case "y", "Y":
+			containerID := a.confirmOperation
+			services := a.services.GetAll()
+			if a.selectedIndex < len(services) {
+				a.operatingOnID = services[a.selectedIndex].ID
+			}
+			a.confirmOperation = ""
+			a.statusMessage = "Deleting container..."
+			return a, a.deleteServiceCmd(containerID)
+		case "n", "N":
+			a.confirmOperation = ""
+			a.statusMessage = "Delete cancelled"
+		default:
+			a.confirmOperation = ""
+		}
+		return a, nil
+	}
+
+	switch keyMsg.String() {
+	case "tab":
+		a.showDetailPanel = !a.showDetailPanel
+		return a, nil
+	case ":":
+		a.inputMode = ModeCommand
+		return a, nil
+	case "/":
+		a.inputMode = ModeSearch
+		return a, nil
+	}
+
+	if a.focus == FocusSidebar {
+		switch keyMsg.String() {
+		case "up", "k":
+			if a.activeCatIndex > 0 {
+				a.activeCatIndex--
+				a.selectedIndex = 0
+				if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
+					return a, a.fetchDiskUsageCmd()
+				}
+			}
+		case "down", "j":
+			if a.activeCatIndex < len(a.categories)-1 {
+				a.activeCatIndex++
+				a.selectedIndex = 0
+				if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
+					return a, a.fetchDiskUsageCmd()
+				}
+			}
+		case "enter", "right", "l":
+			a.focus = FocusMainList
+		}
+	} else {
+		switch keyMsg.String() {
+		case "left", "h":
+			a.focus = FocusSidebar
+		case "up", "k":
+			if a.selectedIndex > 0 {
+				a.selectedIndex--
+			}
+		case "down", "j":
+			if a.selectedIndex < len(a.getFilteredServices())-1 {
+				a.selectedIndex++
+			}
+		case "enter":
+			services := a.getFilteredServices()
+			if a.selectedIndex < len(services) {
+				svc := services[a.selectedIndex]
+				a.actionMenuView = NewActionMenuView(svc, a.dockerClient, a.width, a.height)
+				a.mode = "action_menu"
+				return a, a.actionMenuView.Init()
+			}
+		}
+	}
+
+	return a, nil
+}
+
+func (a *App) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+		a.inputMode = ModeNormal
+	}
+	return a, nil
+}
+
+func (a *App) updateSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+		a.inputMode = ModeNormal
+	}
 	return a, nil
 }
 

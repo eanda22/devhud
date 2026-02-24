@@ -68,8 +68,8 @@ func renderMainPanel(a *App, services []*service.Service, category string, width
 		footer = renderInlineActionMenu(a.actionMenuView)
 		footerLines = len(a.actionMenuView.actions) + 9
 	} else {
-		footer = buildFooter(a.focus, a.confirmOperation, a.statusMessage)
-		footerLines = 2
+		footer = buildStatusLine(a)
+		footerLines = 1
 	}
 
 	contentHeight := height - 4
@@ -194,21 +194,35 @@ func getDiskColumn(svc *service.Service, dockerDiskUsage *docker.DiskUsage) stri
 	return fmt.Sprintf("%d", svc.Port)
 }
 
-func buildFooter(focus Focus, confirmOperation string, statusMessage string) string {
-	footer := "\n"
-	if confirmOperation != "" {
-		footer += "⚠ Confirm delete? [y/N]\n"
-	} else {
-		if focus == FocusSidebar {
-			footer += "[↑/↓] Navigate   [→] Select   [Tab] Details   [q] Quit\n"
+func buildStatusLine(a *App) string {
+	if a.confirmOperation != "" {
+		return "\n" + confirmDeleteStyle.Render(" DELETE ") + "  Confirm delete? [y/N]"
+	}
+
+	var mode, hints string
+
+	switch a.inputMode {
+	case ModeCommand:
+		mode = commandModeStyle.Render(" COMMAND ")
+		hints = "Type command  [Esc] Cancel"
+	case ModeSearch:
+		mode = searchModeStyle.Render(" SEARCH ")
+		hints = "Type to filter  [Enter] Lock  [Esc] Cancel"
+	default:
+		mode = normalModeStyle.Render(" NORMAL ")
+		if a.focus == FocusSidebar {
+			hints = "[j/k] Nav  [l] Select  [Tab] Details  [/] Search  [:] Cmd"
 		} else {
-			footer += "[↑/↓] Navigate   [←] Back   [Enter] Actions   [Tab] Details   [q] Quit\n"
-		}
-		if statusMessage != "" {
-			footer += fmt.Sprintf("%s\n", statusMessage)
+			hints = "[j/k] Nav  [h] Back  [Enter] Actions  [Tab] Details  [/] Search  [:] Cmd"
 		}
 	}
-	return footer
+
+	line := "\n" + mode + "  " + hints
+	if a.statusMessage != "" {
+		line += "  " + subtleStyle.Render(a.statusMessage)
+	}
+
+	return line
 }
 
 func visibleWindow(totalItems, selectedIndex, maxVisible int) (int, int) {

@@ -61,6 +61,30 @@ var (
 				Background(lipgloss.Color("#FFA500")).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true)
+
+	normalModeStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#7D56F4")).
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Bold(true).
+			Padding(0, 1)
+
+	commandModeStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#FFA500")).
+				Foreground(lipgloss.Color("#000000")).
+				Bold(true).
+				Padding(0, 1)
+
+	searchModeStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#2ECC71")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 1)
+
+	confirmDeleteStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#E74C3C")).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Bold(true).
+				Padding(0, 1)
 )
 
 // renders the welcome screen.
