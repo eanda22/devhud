@@ -213,7 +213,7 @@ func buildStatusLine(a *App) string {
 		if a.focus == FocusSidebar {
 			hints = "[j/k] Nav  [l] Select  [Tab] Details  [/] Search  [:] Cmd"
 		} else {
-			hints = "[j/k] Nav  [h] Back  [Enter] Actions  [Tab] Details  [/] Search  [:] Cmd"
+			hints = "[j/k] Nav  [s]top  [r]estart  [l]ogs  [d]el  [i]nspect  [1-3] Cat  [:] Cmd"
 		}
 	}
 
