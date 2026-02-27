@@ -43,6 +43,7 @@ type App struct {
 	inspectView      *InspectView
 	dbTablesView     *DBTablesView
 	dbDataView       *DBDataView
+	helpView         *HelpView
 	width            int
 	height           int
 	focus            Focus
@@ -419,6 +420,17 @@ func (a *App) updateFullScreenView(msg tea.Msg) (tea.Cmd, bool) {
 		return cmd, true
 	}
 
+	if a.mode == "help" && a.helpView != nil {
+		updatedView, cmd := a.helpView.Update(msg)
+		a.helpView = updatedView
+		if a.helpView.shouldExit {
+			a.mode = "dashboard"
+			a.helpView = nil
+			return nil, true
+		}
+		return cmd, true
+	}
+
 	return nil, false
 }
 
@@ -485,6 +497,10 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ":":
 		a.inputMode = ModeCommand
 		return a, nil
+	case "?":
+		a.helpView = NewHelpView(a.width, a.height)
+		a.mode = "help"
+		return a, a.helpView.Init()
 	case "/":
 		a.inputMode = ModeSearch
 		a.searchInput.SetValue(a.searchFilter)
@@ -666,6 +682,9 @@ func (a *App) View() string {
 	}
 	if a.mode == "db_data" && a.dbDataView != nil {
 		return a.dbDataView.View()
+	}
+	if a.mode == "help" && a.helpView != nil {
+		return a.helpView.View()
 	}
 	return RenderDashboard(a)
 }
