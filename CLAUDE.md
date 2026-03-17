@@ -47,6 +47,7 @@ Before opening a PR:
 3. Resolve any conflicts locally
 4. Push to remote: `git push -u origin <branch-name>` (or `--force-with-lease` if rebasing existing branch)
 5. Open PR with clear description of changes
+6. Always target `main` as the base branch — never target another feature branch
 
 This ensures the branch is up-to-date and conflicts are resolved before review.
 
