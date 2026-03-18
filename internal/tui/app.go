@@ -55,6 +55,7 @@ type App struct {
 	waitingForG      bool
 	searchInput      textinput.Model
 	searchFilter     string
+	commandBar       *CommandBar
 }
 
 type Focus int
@@ -95,6 +96,7 @@ func NewApp() (*App, error) {
 		activeCatIndex: 0,
 		focus:          FocusSidebar,
 		searchInput:    si,
+		commandBar:     newCommandBar(),
 	}, nil
 }
 
@@ -319,8 +321,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	keyMsg := msg.(tea.KeyMsg)
-	switch keyMsg.String() {
-	case "q", "ctrl+c":
+	if keyMsg.String() == "ctrl+c" || (keyMsg.String() == "q" && a.inputMode == ModeNormal) {
 		if a.dockerClient != nil {
 			a.dockerClient.Close()
 		}
@@ -496,7 +497,7 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case ":":
 		a.inputMode = ModeCommand
-		return a, nil
+		return a, a.commandBar.Focus()
 	case "?":
 		a.helpView = NewHelpView(a.width, a.height)
 		a.mode = "help"
@@ -641,10 +642,35 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+	cmd, shouldExecute, shouldCancel := a.commandBar.Update(msg)
+	a.commandBar.SetCompletions(a.completions(a.commandBar.Value()))
+
+	if shouldCancel {
+		a.commandBar.Blur()
 		a.inputMode = ModeNormal
+		return a, nil
 	}
-	return a, nil
+
+	if shouldExecute {
+		input := strings.TrimSpace(a.commandBar.Value())
+		if input == "" {
+			a.commandBar.Blur()
+			a.inputMode = ModeNormal
+			return a, nil
+		}
+		oldStatus := a.statusMessage
+		execCmd := a.executeCommand(parseCommand(input))
+		if execCmd == nil && a.statusMessage != oldStatus {
+			a.commandBar.SetError(a.statusMessage)
+			a.statusMessage = oldStatus
+			return a, nil
+		}
+		a.commandBar.Blur()
+		a.inputMode = ModeNormal
+		return a, execCmd
+	}
+
+	return a, cmd
 }
 
 func (a *App) updateSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {

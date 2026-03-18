@@ -85,6 +85,21 @@ var (
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Bold(true).
 				Padding(0, 1)
+
+	commandBarBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#FFA500")).
+				Padding(0, 1)
+
+	completionItemStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#626262"))
+
+	completionSelectedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFA500")).
+				Bold(true)
+
+	commandErrorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E74C3C"))
 )
 
 // renders the welcome screen.

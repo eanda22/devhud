@@ -99,8 +99,30 @@ func helpContent() string {
 			title: "Modes",
 			keys: [][2]string{
 				{"/", "Enter SEARCH mode"},
+				{":", "Open command bar"},
 				{"?", "Open this help overlay"},
 				{"Esc", "Return to NORMAL / clear filter"},
+			},
+		},
+		{
+			title: "Command Bar",
+			keys: [][2]string{
+				{":", "Open command bar"},
+				{"Tab", "Auto-complete category / action / service"},
+				{"↑ / ↓", "Browse command history"},
+				{"Enter", "Execute command"},
+				{"Esc", "Cancel and return to NORMAL"},
+			},
+		},
+		{
+			title: "Command Grammar",
+			keys: [][2]string{
+				{"containers <action> <name>", "e.g. containers stop api"},
+				{"c / p / db", "Short aliases for categories"},
+				{"stop / start / restart ...", "Short-form verbs (no category needed)"},
+				{"logs <name>", "Open logs for a service"},
+				{"help", "Open help overlay"},
+				{"quit / q", "Quit devhud"},
 			},
 		},
 		{
