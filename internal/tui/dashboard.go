@@ -25,7 +25,12 @@ func renderHeader(category string) string {
 
 func RenderDashboard(a *App) string {
 	services := a.getFilteredServices()
-	panelHeight := a.height - 2
+
+	commandBarHeight := 0
+	if a.inputMode == ModeCommand {
+		commandBarHeight = 4 + a.commandBar.CompletionLines()
+	}
+	panelHeight := a.height - 2 - commandBarHeight
 
 	if len(services) == 0 {
 		msg := "No services discovered. Scanning..."
@@ -33,7 +38,11 @@ func RenderDashboard(a *App) string {
 			msg += fmt.Sprintf("\nLast error: %v", a.lastError)
 		}
 		style := dashboardStyle.Copy().Height(panelHeight).Width(a.width - sidebarWidth - 6)
-		return lipgloss.JoinHorizontal(lipgloss.Top, renderSidebar(a, panelHeight), style.Render(msg))
+		panels := lipgloss.JoinHorizontal(lipgloss.Top, renderSidebar(a, panelHeight), style.Render(msg))
+		if a.inputMode == ModeCommand {
+			return panels + a.commandBar.BoxView(a.width)
+		}
+		return panels
 	}
 
 	sidebar := renderSidebar(a, panelHeight)
@@ -52,12 +61,18 @@ func RenderDashboard(a *App) string {
 
 	mainContent := renderMainPanel(a, services, selectedCategory, mainWidth, panelHeight)
 
+	var panels string
 	if a.showDetailPanel && a.selectedIndex < len(services) {
 		detail := renderDetailPanel(services[a.selectedIndex], panelHeight)
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent, detail)
+		panels = lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent, detail)
+	} else {
+		panels = lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainContent)
+	if a.inputMode == ModeCommand {
+		return panels + a.commandBar.BoxView(a.width)
+	}
+	return panels
 }
 
 func renderMainPanel(a *App, services []*service.Service, category string, width, height int) string {
@@ -206,7 +221,7 @@ func buildStatusLine(a *App) string {
 	switch a.inputMode {
 	case ModeCommand:
 		mode = commandModeStyle.Render(" COMMAND ")
-		hints = "Type command  [Esc] Cancel"
+		hints = ""
 	case ModeSearch:
 		mode = searchModeStyle.Render(" SEARCH ")
 		hints = a.searchInput.View() + "  [Enter] Lock  [Esc] Cancel"
