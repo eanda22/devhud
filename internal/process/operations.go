@@ -12,11 +12,3 @@ func Stop(pid int) error {
 	}
 	return nil
 }
-
-// kills a process with SIGKILL.
-func Kill(pid int) error {
-	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
-		return fmt.Errorf("kill process: %w", err)
-	}
-	return nil
-}

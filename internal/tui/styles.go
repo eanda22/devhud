@@ -101,12 +101,3 @@ var (
 	commandErrorStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#E74C3C"))
 )
-
-// renders the welcome screen.
-func RenderWelcome() string {
-	title := titleStyle.Render("devhud")
-	content := "Welcome to devhud!\n\nA unified local dev environment manager"
-	help := subtleStyle.Render("\nPress 'q' to quit")
-
-	return boxStyle.Render(title + "\n\n" + content + help)
-}
