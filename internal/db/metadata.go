@@ -79,9 +79,13 @@ func (c *Client) ListTables(ctx context.Context) ([]TableInfo, error) {
 }
 
 func (c *Client) getTableRowCount(ctx context.Context, tableName string) (int, error) {
-	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)
+	quoted, err := quoteIdentifier(tableName, c.dbType)
+	if err != nil {
+		return 0, err
+	}
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", quoted)
 	var count int
-	err := c.db.QueryRowContext(ctx, query).Scan(&count)
+	err = c.db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

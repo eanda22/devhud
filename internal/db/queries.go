@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // ColumnInfo holds metadata about a table column.
@@ -62,15 +63,11 @@ func (c *Client) GetTableColumns(ctx context.Context, tableName string) ([]Colum
 
 // GetTableData returns paginated rows from a table.
 func (c *Client) GetTableData(ctx context.Context, tableName string, limit, offset int) (RowData, error) {
-	var query string
-	switch c.dbType {
-	case "postgres":
-		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, limit, offset)
-	case "mysql":
-		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, limit, offset)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", c.dbType)
+	quoted, err := quoteIdentifier(tableName, c.dbType)
+	if err != nil {
+		return nil, err
 	}
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", quoted, limit, offset)
 
 	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
@@ -112,4 +109,16 @@ func (c *Client) GetTableData(ctx context.Context, tableName string, limit, offs
 	}
 
 	return data, nil
+}
+
+// quoteIdentifier wraps a table or column name in the appropriate quotes for the database type.
+func quoteIdentifier(name, dbType string) (string, error) {
+	switch dbType {
+	case "postgres":
+		return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`, nil
+	case "mysql":
+		return "`" + strings.ReplaceAll(name, "`", "``") + "`", nil
+	default:
+		return "", fmt.Errorf("unsupported database type: %s", dbType)
+	}
 }
