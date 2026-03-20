@@ -310,6 +310,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wmsg, ok := msg.(tea.WindowSizeMsg); ok {
 		a.width = wmsg.Width
 		a.height = wmsg.Height
+	}
+
+	if cmd, handled := a.updateFullScreenView(msg); handled {
+		return a, cmd
+	}
+
+	if _, ok := msg.(tea.WindowSizeMsg); ok {
 		return a, nil
 	}
 
@@ -327,10 +334,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.scanner.Close()
 		return a, tea.Quit
-	}
-
-	if cmd, handled := a.updateFullScreenView(msg); handled {
-		return a, cmd
 	}
 
 	switch a.inputMode {
