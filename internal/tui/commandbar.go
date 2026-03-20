@@ -129,6 +129,11 @@ func (cb *CommandBar) SetError(msg string) {
 	cb.errMsg = msg
 }
 
+// ClearError removes any displayed error message.
+func (cb *CommandBar) ClearError() {
+	cb.errMsg = ""
+}
+
 // CompletionLines returns the number of lines the completion popup occupies.
 func (cb *CommandBar) CompletionLines() int {
 	n := len(cb.candidates)
@@ -154,7 +159,7 @@ func (cb *CommandBar) Update(msg tea.Msg) (tea.Cmd, bool, bool) {
 	switch keyMsg.String() {
 	case "enter":
 		val := strings.TrimSpace(cb.input.Value())
-		if val != "" {
+		if val != "" && (len(cb.history) == 0 || cb.history[len(cb.history)-1] != val) {
 			cb.history = append(cb.history, val)
 		}
 		return nil, true, false
@@ -242,7 +247,6 @@ func (cb *CommandBar) Update(msg tea.Msg) (tea.Cmd, bool, bool) {
 		return nil, false, false
 	}
 
-	cb.errMsg = ""
 	cb.cycling = false
 	var cmd tea.Cmd
 	cb.input, cmd = cb.input.Update(msg)

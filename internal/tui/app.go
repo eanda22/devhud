@@ -658,6 +658,7 @@ func (a *App) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.inputMode = ModeNormal
 			return a, nil
 		}
+		a.commandBar.ClearError()
 		oldStatus := a.statusMessage
 		execCmd := a.executeCommand(parseCommand(input))
 		if execCmd == nil && a.statusMessage != oldStatus {
