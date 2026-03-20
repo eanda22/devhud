@@ -29,7 +29,7 @@ func TestParseCommand(t *testing.T) {
 		{
 			name:     "category alias db",
 			input:    "db browse",
-			category: "databases",
+			category: "containers",
 			action:   "browse",
 		},
 		{
@@ -75,7 +75,7 @@ func TestParseCommand(t *testing.T) {
 		{
 			name:     "short-form verb browse",
 			input:    "browse mydb",
-			category: "databases",
+			category: "containers",
 			action:   "browse",
 			target:   "mydb",
 		},
@@ -136,17 +136,16 @@ func TestParseCommand(t *testing.T) {
 }
 
 func TestFilterPrefix(t *testing.T) {
-	candidates := []string{"containers", "processes", "databases", "help", "quit"}
+	candidates := []string{"containers", "processes", "help", "quit"}
 
 	tests := []struct {
 		name   string
 		prefix string
 		want   int
 	}{
-		{"empty prefix matches all", "", 5},
+		{"empty prefix matches all", "", 4},
 		{"matches con", "con", 1},
 		{"matches p", "p", 1},
-		{"matches d", "d", 1},
 		{"no match", "xyz", 0},
 		{"case insensitive", "CON", 1},
 	}

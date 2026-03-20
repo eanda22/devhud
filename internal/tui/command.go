@@ -20,8 +20,8 @@ var categoryAliases = map[string]string{
 	"containers": "containers",
 	"p":          "processes",
 	"processes":  "processes",
-	"db":         "databases",
-	"databases":  "databases",
+	"db":         "containers",
+	"databases":  "containers",
 }
 
 var shortForms = map[string]string{
@@ -31,7 +31,7 @@ var shortForms = map[string]string{
 	"logs":    "containers",
 	"inspect": "containers",
 	"kill":    "processes",
-	"browse":  "databases",
+	"browse":  "containers",
 }
 
 func parseCommand(input string) Parsed {
@@ -106,8 +106,6 @@ func (a *App) executeCommand(p Parsed) tea.Cmd {
 		return a.executeContainerCommand(p)
 	case "processes":
 		return a.executeProcessCommand(p)
-	case "databases":
-		return a.executeDatabaseCommand(p)
 	default:
 		switch strings.ToLower(p.Action) {
 		case "help":
@@ -130,7 +128,7 @@ func (a *App) executeContainerCommand(p Parsed) tea.Cmd {
 		a.selectedIndex = 0
 		a.focus = FocusMainList
 		return a.fetchDiskUsageCmd()
-	case "stop", "start", "restart", "logs", "inspect", "shell", "delete":
+	case "stop", "start", "restart", "logs", "inspect", "shell", "delete", "browse":
 		if p.Target == "" {
 			a.statusMessage = "usage: containers " + p.Action + " <name>"
 			return nil
@@ -148,6 +146,7 @@ func (a *App) executeContainerCommand(p Parsed) tea.Cmd {
 			"inspect": "Inspect JSON",
 			"shell":   "Open Shell (/bin/sh)",
 			"delete":  "Delete Container",
+			"browse":  "Browse Database",
 		}
 		return a.executeActionFromMenu(actionMap[p.Action], svc)
 	default:
@@ -180,37 +179,12 @@ func (a *App) executeProcessCommand(p Parsed) tea.Cmd {
 	}
 }
 
-func (a *App) executeDatabaseCommand(p Parsed) tea.Cmd {
-	switch p.Action {
-	case "list":
-		a.activeCatIndex = 2
-		a.selectedIndex = 0
-		a.focus = FocusMainList
-		return nil
-	case "browse":
-		if p.Target == "" {
-			a.statusMessage = "usage: databases browse <name>"
-			return nil
-		}
-		svc, errMsg := a.resolveService(p.Target)
-		if svc == nil {
-			a.statusMessage = errMsg
-			return nil
-		}
-		return a.executeActionFromMenu("Browse Database", svc)
-	default:
-		a.statusMessage = "unknown databases action: " + p.Action
-		return nil
-	}
-}
-
 func (a *App) completions(input string) []string {
 	parts := strings.Fields(input)
 
-	categories := []string{"containers", "processes", "databases", "help", "quit"}
-	containerActions := []string{"list", "stop", "start", "restart", "logs", "inspect", "shell", "delete"}
+	categories := []string{"containers", "processes", "help", "quit"}
+	containerActions := []string{"list", "stop", "start", "restart", "logs", "inspect", "shell", "delete", "browse"}
 	processActions := []string{"list", "kill"}
-	databaseActions := []string{"list", "browse"}
 
 	if len(parts) == 0 {
 		return categories
@@ -227,8 +201,6 @@ func (a *App) completions(input string) []string {
 			return filterPrefix(containerActions, parts[1])
 		case "processes":
 			return filterPrefix(processActions, parts[1])
-		case "databases":
-			return filterPrefix(databaseActions, parts[1])
 		}
 		return nil
 	}
