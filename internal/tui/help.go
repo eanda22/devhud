@@ -117,12 +117,13 @@ func helpContent() string {
 		{
 			title: "Command Grammar",
 			keys: [][2]string{
-				{"containers <action> <name>", "e.g. containers stop api"},
+				{"<verb> <name>", "Primary syntax (e.g. stop nginx)"},
+				{"s / r / l / d / i / b", "Single-letter verb aliases"},
+				{"containers <action> <name>", "Category syntax (e.g. c stop api)"},
 				{"c / p / db", "Short aliases for categories"},
-				{"stop / start / restart ...", "Short-form verbs (no category needed)"},
-				{"logs <name>", "Open logs for a service"},
 				{"help", "Open help overlay"},
 				{"quit / q", "Quit devhud"},
+				{"", "Completions are context-aware per verb"},
 			},
 		},
 		{
