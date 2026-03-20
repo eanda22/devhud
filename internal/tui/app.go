@@ -611,6 +611,16 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.statusMessage = "Inspect not available"
 			return a, nil
+		case "b":
+			svc := a.selectedService()
+			if svc == nil {
+				return a, nil
+			}
+			if svc.DBType != "" {
+				return a, a.executeActionFromMenu("Browse Database", svc)
+			}
+			a.statusMessage = "Not a database container"
+			return a, nil
 		case "G":
 			services := a.getFilteredServices()
 			if len(services) > 0 {

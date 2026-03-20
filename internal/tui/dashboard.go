@@ -231,9 +231,9 @@ func buildStatusLine(a *App) string {
 			mode += "  " + subtleStyle.Render("filter: "+a.searchFilter+" [/ edit, Esc clear]")
 		}
 		if a.focus == FocusSidebar {
-			hints = "[j/k] Nav  [l] Select  [Tab] Details  [/] Search  [:] Cmd"
+			hints = "[j/k] Nav  [l/Enter] Select  [/] Search  [:] Cmd"
 		} else {
-			hints = "[j/k] Nav  [s]top  [r]estart  [l]ogs  [d]el  [i]nspect  [1-2] Cat  [:] Cmd"
+			hints = buildMainListHints(a.selectedService())
 		}
 	}
 
@@ -243,6 +243,36 @@ func buildStatusLine(a *App) string {
 	}
 
 	return line
+}
+
+func buildMainListHints(svc *service.Service) string {
+	parts := []string{"[j/k] Nav"}
+
+	if svc != nil {
+		isDocker := svc.Type == service.ServiceTypeDocker || svc.Type == service.ServiceTypeCompose
+
+		switch {
+		case isDocker && svc.Status == service.StatusStopped:
+			parts = append(parts, "[s]tart")
+		case isDocker:
+			parts = append(parts, "[s]top", "[r]estart")
+		case svc.Type == service.ServiceTypeProcess:
+			parts = append(parts, "[s] Kill")
+		}
+
+		if isDocker {
+			parts = append(parts, "[l]ogs", "[d]el", "[i]nspect")
+		} else if svc.Type == service.ServiceTypeProcess {
+			parts = append(parts, "[l]ogs")
+		}
+
+		if svc.DBType != "" {
+			parts = append(parts, "[b] DB")
+		}
+	}
+
+	parts = append(parts, "[h] Back", "[:] Cmd")
+	return strings.Join(parts, "  ")
 }
 
 func visibleWindow(totalItems, selectedIndex, maxVisible int) (int, int) {
