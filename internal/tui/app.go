@@ -92,7 +92,7 @@ func NewApp() (*App, error) {
 		scanner:        scan,
 		dockerClient:   dockerClient,
 		mode:           "dashboard",
-		categories:     []string{"Containers", "Local Procs", "Databases"},
+		categories:     []string{"Containers", "Local Procs"},
 		activeCatIndex: 0,
 		focus:          FocusSidebar,
 		searchInput:    si,
@@ -286,14 +286,6 @@ func (a *App) getFilteredServices() []*service.Service {
 		return containers
 	} else if a.activeCatIndex == 1 {
 		return a.services.GetByType(service.ServiceTypeProcess)
-	} else if a.activeCatIndex == 2 {
-		var databases []*service.Service
-		for _, svc := range a.services.GetAll() {
-			if svc.DBType != "" {
-				databases = append(databases, svc)
-			}
-		}
-		return databases
 	}
 	return a.services.GetAll()
 }
@@ -520,11 +512,6 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.selectedIndex = 0
 		a.focus = FocusMainList
 		return a, nil
-	case "3":
-		a.activeCatIndex = 2
-		a.selectedIndex = 0
-		a.focus = FocusMainList
-		return a, a.fetchDiskUsageCmd()
 	}
 
 	if a.focus == FocusSidebar {
@@ -533,7 +520,7 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.activeCatIndex > 0 {
 				a.activeCatIndex--
 				a.selectedIndex = 0
-				if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
+				if a.activeCatIndex == 0 {
 					return a, a.fetchDiskUsageCmd()
 				}
 			}
@@ -541,7 +528,7 @@ func (a *App) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.activeCatIndex < len(a.categories)-1 {
 				a.activeCatIndex++
 				a.selectedIndex = 0
-				if a.activeCatIndex == 0 || a.activeCatIndex == 2 {
+				if a.activeCatIndex == 0 {
 					return a, a.fetchDiskUsageCmd()
 				}
 			}

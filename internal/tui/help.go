@@ -78,7 +78,7 @@ func helpContent() string {
 				{"k / ↑", "Move up"},
 				{"h / ←", "Focus sidebar"},
 				{"l / → / Enter", "Focus main list"},
-				{"1 / 2 / 3", "Jump to Containers / Processes / Databases"},
+				{"1 / 2", "Jump to Containers / Processes"},
 				{"G", "Jump to last item"},
 				{"gg", "Jump to first item"},
 				{"Tab", "Toggle detail panel"},
